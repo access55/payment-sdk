@@ -11,7 +11,7 @@
   "author": "Access55",
   "license": "MIT",
   "devDependencies": {
-    "esbuild": "^0.21.5"
+    "esbuild": "^0.25.8"
   },
-  "packageManager": "pnpm@10.11.0"
+  "packageManager": "pnpm@10.13.1"
 }
