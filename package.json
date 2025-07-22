@@ -1,6 +1,6 @@
 {
   "name": "a55pay-sdk",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Embeddable Payment SDK for 3DS integration (A55)",
   "main": "a55pay-sdk.js",
   "scripts": {
