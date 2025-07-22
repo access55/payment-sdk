@@ -11,7 +11,7 @@ The A55Pay SDK provides a simple way to integrate 3DS and payment submission int
 
 ```html
 <!-- Add this to your checkout page -->
-<script src="a55pay-sdk.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/a55pay-sdk@latest"></script>
 <script>
   // Example: charge_uuid from your backend
   const charge_uuid = '...';
@@ -35,7 +35,7 @@ The A55Pay SDK provides a simple way to integrate 3DS and payment submission int
 
   A55Pay.pay({
     selector: '#your-form', // CSS selector for the form or container
-    charge_uuid,
+    charge_uuid, // This charge_uuid comes from the charge creation response
     userData,
     onSuccess: function(result) {
       // Handle payment success
@@ -43,7 +43,7 @@ The A55Pay SDK provides a simple way to integrate 3DS and payment submission int
     },
     onError: function(error) {
       // Handle error
-      alert(error.message);
+      console.log('Payment error:', error);
     },
     onReady: function() {
       // Optional: called when 3DS is ready
