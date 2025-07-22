@@ -4,19 +4,35 @@ Embeddable Payment SDK for 3DS integration (Access55)
 
 ## Usage
 
-Include via CDN (after publishing to npm):
+### Always use the latest version
+
+This SDK is published automatically on every push to `main`. To always get the latest version, use one of the following methods:
+
+#### CDN (recommended)
 
 ```
-<script src="https://cdn.jsdelivr.net/npm/a55pay-sdk/dist/a55pay-sdk.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/a55pay-sdk@latest/dist/a55pay-sdk.min.js"></script>
 <!-- or -->
-<script src="https://unpkg.com/a55pay-sdk/dist/a55pay-sdk.min.js"></script>
+<script src="https://unpkg.com/a55pay-sdk@latest/dist/a55pay-sdk.min.js"></script>
 ```
 
-Or use the local build:
+#### npm (recommended for projects)
+
+```
+npm install a55pay-sdk@latest
+# or
+yarn add a55pay-sdk@latest
+# or
+pnpm add a55pay-sdk@latest
+```
+
+#### Local build (for development)
 
 ```
 <script src="dist/a55pay-sdk.min.js"></script>
 ```
+
+> **Note:** Always use `@latest` to ensure you get the most recent version. Version bumps are handled automatically by our CI/CD pipeline.
 
 ## Build
 
@@ -39,6 +55,15 @@ npm install -g pnpm
    - Update version in package.json
    - Run `npm publish`
 2. Your SDK will be available via jsDelivr and UNPKG automatically.
+
+## Automated Publishing
+
+Every push to the `main` branch triggers a GitHub Actions workflow that:
+- Installs dependencies with pnpm
+- Builds the SDK
+- Publishes the latest version to npm with `@latest`
+
+Your SDK will be available via jsDelivr and UNPKG automatically after each publish.
 
 ## Directory Structure
 
