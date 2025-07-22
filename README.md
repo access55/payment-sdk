@@ -11,9 +11,9 @@ This SDK is published automatically on every push to `main`. To always get the l
 #### CDN (recommended)
 
 ```
-<script src="https://cdn.jsdelivr.net/npm/a55pay-sdk@latest/dist/a55pay-sdk.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/a55pay-sdk@latest"></script>
 <!-- or -->
-<script src="https://unpkg.com/a55pay-sdk@latest/dist/a55pay-sdk.min.js"></script>
+<script src="https://unpkg.com/a55pay-sdk@latest"></script>
 ```
 
 #### npm (recommended for projects)
@@ -55,6 +55,18 @@ npm install -g pnpm
    - Update version in package.json
    - Run `npm publish`
 2. Your SDK will be available via jsDelivr and UNPKG automatically.
+
+
+## Purge CDN Cache (jsDelivr)
+
+If you publish a new version and the CDN does not update immediately, you can force-refresh the cache using the jsDelivr purge tool:
+
+1. Go to [https://www.jsdelivr.com/tools/purge](https://www.jsdelivr.com/tools/purge)
+2. Enter the full URL of your file, for example:
+   - `https://cdn.jsdelivr.net/npm/a55pay-sdk@latest`
+3. Click **Purge** to clear the cache and force jsDelivr to fetch the latest version.
+
+This is useful if you or your users are not seeing the latest changes after a new release.
 
 ## Automated Publishing
 
