@@ -2,11 +2,11 @@
   "name": "a55pay-sdk",
   "version": "1.0.1",
   "description": "Embeddable Payment SDK for 3DS integration (A55)",
-  "main": "a55pay-sdk.js",
+  "main": "src/a55pay-sdk.js",
   "scripts": {
     "build": "pnpm run '/^build:.*/'",
-    "build:prd": "esbuild a55pay-sdk.js --bundle --minify --outfile=dist/a55pay-sdk.min.js",
-    "build:dev": "esbuild a55pay-sdk.js --bundle --outfile=dist/a55pay-sdk.js"
+    "build:prd": "esbuild src/a55pay-sdk.js --bundle --minify --outfile=dist/a55pay-sdk.min.js",
+    "build:dev": "esbuild src/a55pay-sdk.js --bundle --outfile=dist/a55pay-sdk.js"
   },
   "author": "Access55",
   "license": "MIT",
