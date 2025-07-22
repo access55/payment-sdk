@@ -60,3 +60,8 @@ jobs:
           git push origin HEAD:main
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Purge jsDelivr CDN cache
+        uses: gacts/purge-jsdelivr-cache@v1.1.2
+        with:
+          url: https://cdn.jsdelivr.net/npm/a55pay-sdk@latest
