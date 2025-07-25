@@ -83,5 +83,45 @@ Your SDK will be available via jsDelivr and UNPKG automatically after each publi
 - `dist/a55pay-sdk.js` - Bundled (dev) build
 - `dist/a55pay-sdk.min.js` - Minified build
 
+## Configuration Options
+
+### `forceThreeds`
+
+The `forceThreeds` parameter is a boolean flag that controls the behavior of the SDK when 3DS authentication fails or is not supported.
+
+- **Default:** `true`
+- **Description:**
+  - When `true`, the SDK will stop the payment process if 3DS authentication fails or is not supported.
+  - When `false`, the SDK will proceed with the payment request even if 3DS authentication fails or is not supported.
+
+### Example Usage
+
+```javascript
+A55Pay.pay({
+  selector: '#payment-container',
+  charge_uuid: 'your-charge-uuid',
+  userData: {
+    number: '4111 1111 1111 1111',
+    month: '12',
+    year: '2030',
+    cvc: '123',
+    holder: 'John Doe',
+    phone: '+5511999999999',
+    street1: 'Street 1',
+    city: 'City',
+    state: 'State',
+    zipcode: '12345-678',
+    country: 'BR',
+  },
+  forceThreeds: false, // Proceed with payment even if 3DS fails
+  onSuccess: (response) => {
+    console.log('Payment successful:', response);
+  },
+  onError: (error) => {
+    console.error('Payment failed:', error);
+  },
+});
+```
+
 ## License
 MIT
