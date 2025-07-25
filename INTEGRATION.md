@@ -81,6 +81,39 @@ You only need to provide the `charge_uuid` (string) from your backend. The SDK w
 
 ---
 
+## forceThreeds Parameter
+
+The `forceThreeds` parameter is a boolean flag that determines how the SDK behaves when 3DS authentication fails or is not supported.
+
+- **Default:** `true`
+- **Behavior:**
+  - When `true`, the SDK will stop the payment process if 3DS authentication fails or is not supported.
+  - When `false`, the SDK will proceed with the payment request even if 3DS authentication fails or is not supported.
+
+### Example Usage with `forceThreeds`
+
+```javascript
+A55Pay.pay({
+  selector: '#your-form',
+  charge_uuid, // This charge_uuid comes from the charge creation response
+  userData,
+  forceThreeds: false, // Proceed with payment even if 3DS fails
+  onSuccess: function(result) {
+    // Handle payment success
+    console.log('Payment success:', result);
+  },
+  onError: function(error) {
+    // Handle error
+    console.log('Payment error:', error);
+  },
+  onReady: function() {
+    // Optional: called when 3DS is ready
+  }
+});
+```
+
+---
+
 ## Notes
 - The SDK will inject all required hidden fields for 3DS into the form/container you specify.
 - All callbacks (`onSuccess`, `onError`, `onReady`) are optional but recommended.

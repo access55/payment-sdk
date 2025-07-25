@@ -11,8 +11,8 @@
    * @param {Object} config - { onSuccess: function, onError: function }
    */
   SDK.pay = function (config) {
-    // config: { selector, charge_uuid, userData, onSuccess, onError, onReady }
-    const { selector, charge_uuid, userData, onSuccess, onError, onReady } = config;
+    // config: { selector, charge_uuid, userData, onSuccess, onError, onReady, forceThreeds }
+    const { selector, charge_uuid, userData, onSuccess, onError, onReady, forceThreeds = true } = config;
     function callOnError(err) { if (typeof onError === 'function') onError(err); }
     function callOnSuccess(res) { if (typeof onSuccess === 'function') onSuccess(res); }
     function callOnReady() { if (typeof onReady === 'function') onReady(); }
@@ -25,6 +25,54 @@
     if (!container) {
       callOnError(new Error('Selector not found: ' + selector));
       return;
+    }
+
+    function sendPaymentRequest(a55Data) {
+      const payload = {
+        payer_name: a55Data.customer?.name,
+        payer_email: a55Data.customer?.email,
+        installment_count: a55Data.installment_count,
+        installment_value: a55Data.value,
+        cell_phone: userData.phone?.replace(/\D/g, ''),
+        card: {
+          holder_name: userData.holder,
+          number: userData.number?.replace(/\s/g, ''),
+          expiry_month: userData.month,
+          expiry_year: userData.year,
+          ccv: userData.cvc,
+        },
+        address: {
+          postal_code: userData.zipcode?.replace(/\D/g, ''),
+          street: userData.street1,
+          address_number: 'n/d',
+          complement: userData.street2 || userData.street1 || '',
+          neighborhood: 'n/d',
+          city: userData.city,
+          state: userData.state,
+          country: userData.country || 'BR',
+        },
+        ...(a55Data.threeds_auth ? { threeds_auth: a55Data.threeds_auth } : {}),
+      };
+      fetch(`https://core-manager.a55.tech/api/v1/bank/public/charge/${a55Data.charge_uuid}/pay`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ ...payload })
+      })
+        .then(async (resp) => {
+          if (!resp.ok) {
+            const err = await resp.json().catch(() => ({}));
+            throw new Error(err.message || 'Payment failed');
+          }
+          return resp.json();
+        })
+        .then((result) => {
+          callOnSuccess(result);
+        })
+        .catch((err) => {
+          callOnError(err);
+        });
     }
 
     // Fetch a55Data from API
@@ -108,72 +156,49 @@
               window.bpmpi_authenticate && window.bpmpi_authenticate();
             },
             onSuccess: function (e) {
-              const payload = {
-                payer_name: a55Data.customer?.name,
-                payer_email: a55Data.customer?.email,
-                installment_count: a55Data.installment_count,
-                installment_value: a55Data.value,
-                cell_phone: userData.phone?.replace(/\D/g, ''),
-                card: {
-                  holder_name: userData.holder,
-                  number: userData.number?.replace(/\s/g, ''),
-                  expiry_month: userData.month,
-                  expiry_year: userData.year,
-                  ccv: userData.cvc,
-                },
-                threeds_auth: {
-                  eci: e.Eci,
-                  request_id: e.ReferenceId,
-                  xid: e.Xid,
-                  cavv: e.Cavv,
-                  version: e.Version
-                },
-                address: {
-                  postal_code: userData.zipcode?.replace(/\D/g, ''),
-                  street: userData.street1,
-                  address_number: 'n/d',
-                  complement: userData.street2 || userData.street1 || '',
-                  neighborhood: 'n/d',
-                  city: userData.city,
-                  state: userData.state,
-                  country: userData.country || 'BR',
-                },
+              const threeds_auth = {
+                eci: e.Eci,
+                request_id: e.ReferenceId,
+                xid: e.Xid,
+                cavv: e.Cavv,
+                version: e.Version
               };
-              fetch(`https://core-manager.a55.tech/api/v1/bank/public/charge/${a55Data.charge_uuid}/pay`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ ...payload })
-              })
-                .then(async (resp) => {
-                  if (!resp.ok) {
-                    const err = await resp.json().catch(() => ({}));
-                    throw new Error(err.message || 'Payment failed');
-                  }
-                  return resp.json();
-                })
-                .then((result) => {
-                  callOnSuccess(result);
-                })
-                .catch((err) => {
-                  callOnError(err);
-                });
+              sendPaymentRequest({ ...a55Data, threeds_auth });
             },
             onFailure: function () {
-              callOnError(new Error('Authentication failed'));
+              if (!forceThreeds) {
+                sendPaymentRequest(a55Data);
+              } else {
+                callOnError(new Error('Authentication failed'));
+              }
             },
             onUnenrolled: function () {
-              callOnError(new Error('Card not eligible for authentication'));
+              if (!forceThreeds) {
+                sendPaymentRequest(a55Data);
+              } else {
+                callOnError(new Error('Card not eligible for authentication'));
+              }
             },
             onDisabled: function () {
-              callOnError(new Error('Authentication disabled'));
+              if (!forceThreeds) {
+                sendPaymentRequest(a55Data);
+              } else {
+                callOnError(new Error('Authentication disabled'));
+              }
             },
             onError: function (e) {
-              callOnError(new Error(e?.ReturnMessage || 'Error during authentication process'));
+              if (!forceThreeds) {
+                sendPaymentRequest(a55Data);
+              } else {
+                callOnError(new Error(e?.ReturnMessage || 'Error during authentication process'));
+              }
             },
             onUnsupportedBrand: function (e) {
-              callOnError(new Error(e?.ReturnMessage || 'Unsupported card brand'));
+              if (!forceThreeds) {
+                sendPaymentRequest(a55Data);
+              } else {
+                callOnError(new Error(e?.ReturnMessage || 'Unsupported card brand'));
+              }
             },
             Environment: 'PRD'
           };
