@@ -1,35 +1,31 @@
 # A55Pay SDK
 
-Embeddable Payment SDK for 3DS integration (Access55)
+Embeddable Payment SDK for 3DS integration (Access55) with Yuno SDK support
+
+## Features
+
+- **3DS Integration**: Built-in support for 3D Secure authentication via Braspag
+- **Yuno SDK Integration**: Full integration with Yuno payment platform
+- **Dynamic Script Loading**: Automatically loads required dependencies
+- **Error Handling**: Comprehensive error handling and validation
+- **Flexible Configuration**: Customizable payment flows and options
 
 ## Usage
 
-### Always use the latest version
+The A55Pay SDK provides two main integration methods:
 
-This SDK is published automatically on every push to `main`. To always get the latest version, use one of the following methods:
+### 1. 3DS Integration (A55Pay.pay)
 
-#### CDN (recommended)
+Traditional 3D Secure integration with Braspag for card payments.
 
-```
-<script src="https://cdn.jsdelivr.net/npm/a55pay-sdk@latest"></script>
-<!-- or -->
-<script src="https://unpkg.com/a55pay-sdk@latest"></script>
-```
+### 2. Yuno SDK Integration (A55Pay.checkout)
 
-#### npm (recommended for projects)
+Modern payment processing through Yuno platform with support for multiple payment methods.
 
-```
-npm install a55pay-sdk@latest
-# or
-yarn add a55pay-sdk@latest
-# or
-pnpm add a55pay-sdk@latest
-```
+# payment-sdk
 
-#### Local build (for development)
-
-```
 <script src="dist/a55pay-sdk.min.js"></script>
+
 ```
 
 > **Note:** Always use `@latest` to ensure you get the most recent version. Version bumps are handled automatically by our CI/CD pipeline.
@@ -80,10 +76,102 @@ Your SDK will be available via jsDelivr and UNPKG automatically after each publi
 ## Directory Structure
 
 - `a55pay-sdk.js` - Source file
+
 - `dist/a55pay-sdk.js` - Bundled (dev) build
+- O botão de pagamento só deve ser habilitado após o evento `onReady`.
+- Use o callback `onLoading` para feedback visual de carregamento.
+- O método `A55Pay.startPayment()` dispara o fluxo de pagamento do Yuno.
 - `dist/a55pay-sdk.min.js` - Minified build
 
 ## Configuration Options
+
+### 3DS Integration (A55Pay.pay)
+
+#### `forceThreeds`
+
+The `forceThreeds` parameter is a boolean flag that controls the behavior of the SDK when 3DS authentication fails or is not supported.
+
+- **Default:** `true`
+- **Description:**
+  - When `true`, the SDK will stop the payment process if 3DS authentication fails or is not supported.
+  - When `false`, the SDK will proceed with the payment request even if 3DS authentication fails or is not supported.
+
+#### Example Usage
+
+```javascript
+A55Pay.pay({
+  selector: '#payment-container',
+  charge_uuid: 'your-charge-uuid',
+  userData: {
+    number: '4111 1111 1111 1111',
+    month: '12',
+    year: '2030',
+    cvc: '123',
+    holder: 'John Doe',
+    phone: '+5511999999999',
+    street1: 'Street 1',
+    city: 'City',
+    state: 'State',
+    zipcode: '12345-678',
+    country: 'BR',
+  },
+  forceThreeds: false, // Proceed with payment even if 3DS fails
+  onSuccess: (response) => {
+    console.log('Payment successful:', response);
+  },
+  onError: (error) => {
+    console.error('Payment failed:', error);
+  },
+});
+```
+
+### Yuno SDK Integration (A55Pay.checkout)
+
+Modern payment integration with Yuno platform supporting multiple payment methods.
+
+#### Example Usage
+
+```javascript
+A55Pay.checkout({
+  selector: '#yuno-checkout-container',
+  charge_uuid: 'your-charge-uuid',
+  checkoutSession: 'your-yuno-checkout-session',
+  apiKey: 'your-yuno-public-api-key',
+  countryCode: 'BR', // Optional, default: 'BR'
+  
+  onSuccess: function(result) {
+    console.log('Payment successful:', result);
+    // result.status: 'SUCCEEDED', 'APPROVED', 'PENDING', etc.
+    // result.pending: boolean indicating if payment is still processing
+  },
+  
+  onError: function(error) {
+    console.error('Payment failed:', error);
+  },
+  
+  onReady: function() {
+    console.log('Yuno SDK loaded and ready');
+  }
+});
+```
+
+#### Required Parameters
+
+- **selector** (string): CSS selector for the checkout container element
+- **charge_uuid** (string): A55 charge UUID
+- **checkoutSession** (string): Yuno checkout session ID
+- **apiKey** (string): Yuno public API key
+
+#### Optional Parameters
+
+- **countryCode** (string): Country code (default: 'BR')
+- **onSuccess** (function): Success callback
+- **onError** (function): Error callback
+- **onReady** (function): Ready callback
+
+For detailed Yuno integration documentation, see [YUNO_INTEGRATION.md](./YUNO_INTEGRATION.md).
+
+## Configuration Options (Legacy)
 
 ### `forceThreeds`
 

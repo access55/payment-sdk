@@ -1,7 +1,7 @@
 {
   "name": "a55pay-sdk",
   "version": "1.0.6",
-  "description": "Embeddable Payment SDK for 3DS integration (A55)",
+  "description": "Embeddable Payment SDK for 3DS integration (A55) with Yuno SDK support",
   "main": "src/a55pay-sdk.js",
   "scripts": {
     "build": "pnpm run '/^build:.*/'",

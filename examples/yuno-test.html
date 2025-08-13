@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste - Integração Yuno SDK</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+        
+        input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        
+        button {
+            background: #007bff;
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        
+        button:hover {
+            background: #0056b3;
+        }
+        
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
+        #yuno-checkout-container {
+            margin: 30px 0;
+            padding: 20px;
+            border: 2px dashed #ddd;
+            border-radius: 8px;
+            min-height: 200px;
+            background: #fafafa;
+        }
+        
+        #yuno-checkout-container-action {
+            margin: 10px 0;
+        }
+        
+        .yuno-loading {
+            opacity: 0.6;
+            pointer-events: none;
+            position: relative;
+        }
+        
+        .yuno-loading::before {
+            content: "Carregando...";
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(255, 255, 255, 0.9);
+            padding: 10px 20px;
+            border-radius: 5px;
+            z-index: 1000;
+        }
+        
+        #payment-status {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 5px;
+            text-align: center;
+            font-weight: bold;
+            display: none;
+        }
+        
+        #payment-status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+            display: block;
+        }
+        
+        #payment-status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+            display: block;
+        }
+        
+        #payment-status.pending {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+            display: block;
+        }
+        
+        .info {
+            background: #e1f5fe;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            border-left: 4px solid #2196f3;
+        }
+        
+        .warning {
+            background: #fff8e1;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            border-left: 4px solid #ff9800;
+        }
+        
+        pre {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            border: 1px solid #e9ecef;
+            overflow-x: auto;
+            font-size: 14px;
+        }
+        
+        .logs {
+            margin-top: 30px;
+            max-height: 300px;
+            overflow-y: auto;
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            border: 1px solid #e9ecef;
+        }
+        
+        .log-entry {
+            margin-bottom: 10px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        
+        .log-info { color: #007bff; }
+        .log-success { color: #28a745; }
+        .log-error { color: #dc3545; }
+        .log-warning { color: #ffc107; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Teste - Integração A55Pay + Yuno SDK</h1>
+        
+        <div class="info">
+            <strong>Informação:</strong> Esta é uma página de teste para a integração entre A55Pay SDK e Yuno SDK. 
+            Preencha os campos abaixo com suas credenciais de teste.
+        </div>
+        
+        <div id="yuno-checkout-container">
+            <p style="text-align: center; color: #666; margin-top: 80px;">
+                O formulário de pagamento aparecerá aqui após a inicialização
+            </p>
+        </div>
+        
+        <div id="yuno-checkout-container-action"></div>
+        
+        <button id="pay-btn" style="margin: 20px 0; width: 100%; font-size: 18px;">Continuar</button>
+        
+    </div>
+
+    <!-- A55Pay SDK -->
+    <script src="../src/a55pay-sdk.js"></script>
+    
+    <script>
+        const chargeUuid = '0048a781-c0c0-47e3-9c63-92964ce76d7f';
+        const checkoutSession =  '21d6985c-f16f-42c4-ad1a-9c09524feef4';
+        const apiKey = 'prod_gAAAAABnk5Yk7ImBwU7AeQNpV6wXzmdLle56IUnzo6qbCaUI1Za5JnE1gSKNQL9hLfG2RSJN1-GAFeTrjkUiYqsgvN-q7WP-8byB2Dp6TR5kwY3tyOKd6-BlqHwWl6MD4GOD1kbQ-f1quSFX9qctTvpB4CiTvZs4628wMSZO9LEBpJC8QQjIQqbz2no4TYzTa6kUeucOlbFp8AEXRzf0v2gWEwOgpQS2F7WYefpxXoWCZKmwc2ho7eLS4Rd2EScdX8kaGvNDW6Fm';
+        const countryCode = 'BR';
+        const selector = '#yuno-checkout-container';
+    
+        // Inicializar A55Pay com Yuno
+        try {
+            A55Pay.checkout({
+                selector: selector,
+                chargeUuid: chargeUuid,
+                checkoutSession: checkoutSession,
+                apiKey: apiKey,
+                countryCode: countryCode,    
+                onSuccess: function(result) {
+                    console.log('Payment result:', result);
+                },
+                onError: function(error) {
+                    console.error('Payment error:', error);
+                },
+                onReady: function() {
+                    console.log('SDK ready');
+                },
+                onLoading: function({ isLoading }) {
+                    const container = document.getElementById('yuno-checkout-container');
+                    if (isLoading) {
+                        console.log('carregando...');
+                        container.classList.add('yuno-loading');
+                    } else {
+                        console.log('carregamento finalizado');
+                        container.classList.remove('yuno-loading');
+                    }
+                }
+            });
+            
+            
+        } catch (error) {
+            console.error('Erro na inicialização do Yuno SDK:', error);           
+        }
+
+        // Adicionar evento de click no botão de pagamento
+        document.getElementById('pay-btn').addEventListener('click', function() {
+            A55Pay.startPayment();
+        });
+
+    </script>
+</body>
+</html>

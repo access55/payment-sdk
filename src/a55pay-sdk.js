@@ -222,6 +222,268 @@
       });
   };
 
+  /**
+   * Yuno checkout integration function
+   * @param {Object} config - { selector, charge_uuid, checkoutSession, apiKey, countryCode, onSuccess, onError, onReady }
+   */
+  SDK.checkout = function (config) {
+    const { 
+      selector, 
+      chargeUuid, 
+      checkoutSession, 
+      apiKey, 
+      countryCode = 'BR',
+      onSuccess, 
+      onError, 
+      onReady,
+      onLoading
+    } = config;
+
+    function callOnError(err) { 
+      if (typeof onError === 'function') onError(err); 
+    }
+    function callOnSuccess(res) { 
+      if (typeof onSuccess === 'function') onSuccess(res); 
+    }
+    function callOnReady() { 
+      if (typeof onReady === 'function') onReady(); 
+    }
+    function callOnLoading(isLoading) {
+      if (typeof onLoading === 'function') onLoading({ isLoading });
+    }
+
+    // Validação de parâmetros obrigatórios
+    if (!selector || !chargeUuid || !checkoutSession || !apiKey) {
+      callOnError(new Error('Missing required parameters: selector, chargeUuid, checkoutSession, or apiKey'));
+      return;
+    }
+
+    const container = document.querySelector(selector);
+    if (!container) {
+      callOnError(new Error('Selector not found: ' + selector));
+      return;
+    }
+
+    // Função para carregar o SDK do Yuno dinamicamente
+    function loadYunoSDK() {
+      return new Promise((resolve, reject) => {
+        // Se o Yuno já está disponível, resolve imediatamente
+        if (window.Yuno) {
+          resolve();
+          return;
+        }
+
+        // Verifica se o script já está sendo carregado
+        const existingScript = document.querySelector('script[src="https://sdk-web.y.uno/v1.1/main.js"]');
+        if (existingScript) {
+          // Script já está carregando, aguarda o evento
+          function handleLoad() {
+            window.removeEventListener('yuno-sdk-loaded', handleLoad);
+            window.removeEventListener('yuno-sdk-error', handleError);
+            resolve();
+          }
+
+          function handleError() {
+            window.removeEventListener('yuno-sdk-loaded', handleLoad);
+            window.removeEventListener('yuno-sdk-error', handleError);
+            reject(new Error('Failed to load Yuno SDK'));
+          }
+
+          window.addEventListener('yuno-sdk-loaded', handleLoad);
+          window.addEventListener('yuno-sdk-error', handleError);
+          return;
+        }
+
+        // Cria e carrega o script
+        const script = document.createElement('script');
+        script.src = 'https://sdk-web.y.uno/v1.1/main.js';
+        script.defer = true;
+        script.id = 'yuno-sdk-script';
+
+        script.onload = () => {
+          // Emite evento customizado quando o SDK do Yuno carrega
+          window.dispatchEvent(new CustomEvent('yuno-sdk-loaded'));
+          resolve();
+        };
+
+        script.onerror = () => {
+          console.error('Failed to load Yuno SDK');
+          window.dispatchEvent(new CustomEvent('yuno-sdk-error'));
+          reject(new Error('Failed to load Yuno SDK'));
+        };
+
+        document.head.appendChild(script);
+      });
+    }
+
+    // Função para aguardar o SDK do Yuno estar pronto
+    function waitForYunoSDK() {
+      return new Promise((resolve, reject) => {
+        // Se o Yuno já está disponível, resolve imediatamente
+        if (window.Yuno) {
+          resolve();
+          return;
+        }
+
+        function handleLoad() {
+          window.removeEventListener('yuno-sdk-loaded', handleLoad);
+          window.removeEventListener('yuno-sdk-error', handleError);
+          resolve();
+        }
+
+        function handleError() {
+          window.removeEventListener('yuno-sdk-loaded', handleLoad);
+          window.removeEventListener('yuno-sdk-error', handleError);
+          reject(new Error('Failed to load Yuno SDK'));
+        }
+
+        window.addEventListener('yuno-sdk-loaded', handleLoad);
+        window.addEventListener('yuno-sdk-error', handleError);
+
+        // Fallback: também escuta o evento original yuno-sdk-ready
+        function handleReady() {
+          window.removeEventListener('yuno-sdk-ready', handleReady);
+          resolve();
+        }
+        window.addEventListener('yuno-sdk-ready', handleReady);
+      });
+    }
+
+    // Função para criar pagamento no backend A55
+    async function createPayment(oneTimeToken) {
+      try {
+        const response = await fetch(`https://core-manager.a55.tech/api/v1/bank/public/charge/${chargeUuid}/pay`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            card: {
+              card_token: oneTimeToken,
+            },
+          })
+        });
+
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({}));
+          throw new Error(error.message || 'Payment failed');
+        }
+
+        return await response.json();
+      } catch (error) {
+        console.error('Error in createPayment:', error);
+        throw error;
+      }
+    }
+
+    // Variável para armazenar a instância do Yuno
+    let yunoInstance = null;
+
+    // Função principal de inicialização do checkout
+    async function initCheckout() {
+      try {
+        // 1. Carregar o SDK do Yuno dinamicamente
+        await loadYunoSDK();
+
+        // 2. Aguardar o SDK estar pronto
+        await waitForYunoSDK();
+
+        // 3. Inicializar o Yuno
+        yunoInstance = await window.Yuno.initialize(apiKey);
+
+        // 4. Configurar e iniciar o checkout
+        await yunoInstance.startCheckout({
+          checkoutSession: checkoutSession,
+          elementSelector: selector,
+          renderMode: {
+            type: 'element',
+            elementSelector: {
+              apmForm: selector,
+              actionForm: selector + '-action',
+            },
+          },
+          countryCode: countryCode,
+          language: countryCode === 'BR' ? 'pt' : 'es',
+          showLoading: true,
+          issuersFormEnable: true,
+          showPaymentStatus: true,
+          
+          // Callback para criação de pagamento
+          async yunoCreatePayment(oneTimeToken) {
+            try {
+              await createPayment(oneTimeToken);
+              yunoInstance.continuePayment();
+            } catch (error) {
+              callOnError(error);
+            }
+          },
+
+          // Callback para resultado do pagamento
+          yunoPaymentResult(data) {
+            const statusText = String(data);
+            
+            if (statusText === 'SUCCEEDED' || statusText === 'APPROVED') {
+              callOnSuccess({ status: statusText, data });
+            } else if ([
+              'REJECTED',
+              'ERROR', 
+              'DECLINED',
+              'CANCELLED',
+              'FAILED',
+            ].includes(statusText)) {
+              callOnError(new Error(`Payment ${statusText.toLowerCase()}: ${data}`));
+            } else if ([
+              'PENDING',
+              'PROCESSING', 
+              'IN_PROGRESS',
+            ].includes(statusText)) {
+              // Status pendente - não recarrega ainda
+              callOnSuccess({ status: statusText, data, pending: true });
+            }
+          },
+
+          // Callback para erros
+          yunoError: (error) => {
+            callOnError(new Error(error?.ReturnMessage || 'Error during payment process'));
+          },
+
+          // Callback para estados de loading
+          onLoading: ({ isLoading }) => {
+            // Adiciona classe CSS para indicar loading
+            if (isLoading) {
+              callOnLoading(true);
+            } else {
+              callOnLoading(false);
+            }
+          },
+
+        });
+
+        // 5. Montar o checkout no DOM
+        yunoInstance.mountCheckout();
+
+        // 6. Expor método startPayment sempre atualizado
+        SDK.startPayment = function() {
+          if (yunoInstance && typeof yunoInstance.startPayment === 'function') {
+            yunoInstance.startPayment();
+          } else {
+            throw new Error('Yuno não está pronto para iniciar o pagamento');
+          }
+        };
+
+        // 7. Chamar callback de pronto
+        callOnReady();
+
+        return yunoInstance;
+      } catch (error) {
+        callOnError(error);
+      }
+    }
+
+    // Iniciar o processo de checkout
+    initCheckout();
+  };
+
   // Expose globally
   global.A55Pay = SDK;
 })(window);
