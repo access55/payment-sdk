@@ -1,11 +1,146 @@
+## SDK Checkout A55Pay — Guia de Integração
+
+Este guia mostra como integrar o SDK de checkout (`A55Pay.checkout`) para processar pagamentos via A55 .
+
+- **Fluxo resumido**:
+  1. Criar a charge na API A55 e obter `charge_uuid` e `session_id`.
+  2. Renderizar o checkout com `A55Pay.checkout` usando `chargeUuid` e `checkoutSession`.
+  3. Receber o webhook de status e atualizar o pedido no seu sistema.
+
+### 1) Criar a charge na API A55
+
+- **Endpoint**: `POST https://core-manager.a55.tech/api/v1/bank/wallet/charge/`
+- **Headers**: `Content-Type: application/json` e `Authorization: Bearer <SEU_TOKEN>`
+- **Payload (exemplo)**:
+
+```json
+{
+  "wallet_uuid": "9f4cdd29-2b9d-4df4-a8cc-5f8d6d3c2e5a",
+  "merchant_id": "d7f8a4b1-7132-4e21-9bcb-1a0a13d3b6f7",
+  "payer_name": "João da Silva Souza",
+  "payer_email": "joao.souza@example.com",
+  "payer_address": {
+    "street": "Avenida Paulista",
+    "address_number": "1000",
+    "complement": "Conjunto 1205",
+    "neighborhood": "Bela Vista",
+    "city": "São Paulo",
+    "state": "SP",
+    "postal_code": "01310200",
+    "country": "BR"
+  },
+  "currency": "BRL",
+  "installment_value": 150.0,
+  "due_date": "2025-08-14",
+  "description": "Assinatura mensal do plano Premium",
+  "type_charge": "credit_card"
+}
+```
+
+- **Resposta (campos relevantes)**: use `charge_uuid` e `session_id` na etapa do checkout.
+
+```json
+{
+  "charge_uuid": "dfc047f5-519d-4892-8380-7f8aaf9e6958",
+  "session_id": "f8502004-e083-47c0-a582-3bd5df4e65eb"
+}
+```
+
+### 2) Renderizar o checkout (A55Pay)
+
+Inclua o SDK e inicialize o checkout informando o container, a charge e a sessão.
+
+```html
+<!-- Container onde  montará o checkout -->
+<div id="checkout-container"></div>
+<div id="checkout-container-action"></div>
+
+<!-- Botão para iniciar o pagamento -->
+<button id="pay-btn">Continuar</button>
+
+<!-- A55Pay SDK -->
+<script src="./src/a55pay-sdk.js"></script>
+
+<script>
+  const selector = '#checkout-container';
+  const chargeUuid = 'dfc047f5-519d-4892-8380-7f8aaf9e6958'; // charge_uuid retornado pela API
+  const checkoutSession = 'f8502004-e083-47c0-a582-3bd5df4e65eb'; // session_id retornado pela API
+  const apiKey = '<SUA_API_KEY_PUBLIC>'; // use a chave do ambiente (sandbox/produção)
+
+  A55Pay.checkout({
+    selector,
+    chargeUuid,
+    checkoutSession,
+    apiKey,
+    countryCode: 'BR',
+    onReady: function () {
+      console.log('habilite UI');
+    },
+    onSuccess: function (result) {
+      // Sucesso, pendente ou aprovado
+      console.log('Pagamento:', result);
+    },
+    onError: function (error) {
+      console.error('Erro no pagamento:', error);
+    },
+    onLoading: function ({ isLoading }) {
+      // Feedback visual opcional
+      console.log('habilite UI');
+    }
+  });
+
+  // Dispare o fluxo de pagamento quando o usuário confirmar
+  document.getElementById('pay-btn').addEventListener('click', function () {
+    A55Pay.startPayment();
+  });
+</script>
+```
+
+- **Atenção aos nomes dos campos**: no SDK use `chargeUuid` (camelCase) e `checkoutSession`. Eles correspondem à resposta da criação da charge: `charge_uuid` e `session_id`.
+
+### 3) Webhooks de status
+
+Após o processamento, o A55 enviará webhooks para a URL configurada no seu cadastro. Utilize o webhook para confirmar e atualizar o status do pedido no seu sistema.
+
+- **Possíveis status (exemplos)**: `confirmed`, `error`, `issued`, `pending`
+- **Exemplo de payload**:
+
+```json
+{
+  "charge_uuid": "dfc047f5-519d-4892-8380-7f8aaf9e6958",
+  "status": "confirmed",
+ 
+}
+```
+
+Trate o webhook como fonte de verdade para a conciliação. Garanta idempotência (ex.: usando `charge_uuid` como chave) e responda com `200 OK` ao receber e processar com sucesso.
+
+
+
+### Erros comuns
+
+- Falta de parâmetros obrigatórios no SDK: verifique `selector`, `chargeUuid`, `checkoutSession` e `apiKey`.
+- `Selector not found`: confirme o `id`/`query` do container no DOM antes de inicializar o checkout.
+- Confusão entre `charge_uuid` (na API) e `chargeUuid` (no SDK). Faça a conversão correta para camelCase no front.
+- CORS/Autorização na criação de charge: a criação via `/wallet/charge/` deve ser feita no backend do seu sistema, com `Authorization: Bearer ...`.
+
+### Ambiente e endpoints
+
+- Criar charge: `POST https://core-manager.a55.tech/api/v1/bank/wallet/charge/`
+- Pagar charge (feito pelo SDK): `POST https://core-manager.a55.tech/api/v1/bank/public/charge/{chargeUuid}/pay`
+
+### Exemplo completo (recomendado para testes)
+
+Veja `examples/test.html` para um exemplo funcional utilizando `A55Pay.checkout`, botão de pagamento e logs de estado.
+
 # A55Pay SDK
 
-Embeddable Payment SDK for 3DS integration (Access55) with Yuno SDK support
+Embeddable Payment SDK for 3DS integration (Access55) with SDK support
 
 ## Features
 
 - **3DS Integration**: Built-in support for 3D Secure authentication via Braspag
-- **Yuno SDK Integration**: Full integration with Yuno payment platform
+- **SDK Integration**: Full integration with payment platform
 - **Dynamic Script Loading**: Automatically loads required dependencies
 - **Error Handling**: Comprehensive error handling and validation
 - **Flexible Configuration**: Customizable payment flows and options
@@ -18,7 +153,7 @@ The A55Pay SDK provides two main integration methods:
 
 Traditional 3D Secure integration with Braspag for card payments.
 
-### 2. Yuno SDK Integration (A55Pay.checkout)
+### 2. SDK Integration (A55Pay.checkout)
 
 Modern payment processing through Yuno platform with support for multiple payment methods.
 
@@ -133,10 +268,10 @@ Modern payment integration with Yuno platform supporting multiple payment method
 
 ```javascript
 A55Pay.checkout({
-  selector: '#yuno-checkout-container',
+  selector: '#checkout-container',
   charge_uuid: 'your-charge-uuid',
-  checkoutSession: 'your-yuno-checkout-session',
-  apiKey: 'your-yuno-public-api-key',
+  checkoutSession: 'your-checkout-session',
+  apiKey: 'your-public-api-key',
   countryCode: 'BR', // Optional, default: 'BR'
   
   onSuccess: function(result) {
