@@ -6,9 +6,53 @@ Este documento descreve como usar a integração com o Yuno SDK no A55Pay SDK.
 
 O A55Pay SDK agora inclui suporte para integração com o Yuno SDK, permitindo processamento de pagamentos através da plataforma Yuno usando o método `SDK.checkout`.
 
-## Configuração Básica
+Este guia mostra como integrar o SDK de checkout (`A55Pay.checkout`) para processar pagamentos via A55 .
 
-### 1. Incluir o SDK
+- **Fluxo resumido**:
+  1. Criar a charge na API A55 e obter `charge_uuid` e `session_id`.
+  2. Renderizar o checkout com `A55Pay.checkout` usando `chargeUuid` e `checkoutSession`.
+  3. Receber o webhook de status e atualizar o pedido no seu sistema.
+
+### 1 Criar a charge na API A55
+
+- **Endpoint**: `POST https://core-manager.a55.tech/api/v1/bank/wallet/charge/`
+- **Headers**: `Content-Type: application/json` e `Authorization: Bearer <SEU_TOKEN>`
+- **Payload (exemplo)**:
+
+```json
+{
+  "wallet_uuid": "9f4cdd29-2b9d-4df4-a8cc-5f8d6d3c2e5a",
+  "merchant_id": "d7f8a4b1-7132-4e21-9bcb-1a0a13d3b6f7",
+  "payer_name": "João da Silva Souza",
+  "payer_email": "joao.souza@example.com",
+  "payer_address": {
+    "street": "Avenida Paulista",
+    "address_number": "1000",
+    "complement": "Conjunto 1205",
+    "neighborhood": "Bela Vista",
+    "city": "São Paulo",
+    "state": "SP",
+    "postal_code": "01310200",
+    "country": "BR"
+  },
+  "currency": "BRL",
+  "installment_value": 150.0,
+  "due_date": "2025-08-14",
+  "description": "Assinatura mensal do plano Premium",
+  "type_charge": "credit_card"
+}
+```
+
+- **Resposta (campos relevantes)**: use `charge_uuid` e `session_id` na etapa do checkout.
+
+```json
+{
+  "charge_uuid": "dfc047f5-519d-4892-8380-7f8aaf9e6958",
+  "session_id": "f8502004-e083-47c0-a582-3bd5df4e65eb"
+}
+```
+
+### 2. Incluir o SDK
 
 ```html
 <script src="a55pay-sdk.js"></script>
@@ -17,20 +61,27 @@ O A55Pay SDK agora inclui suporte para integração com o Yuno SDK, permitindo p
 ### 2. HTML Requerido
 
 ```html
-<div id="yuno-checkout-container"></div>
-<div id="yuno-checkout-container-action"></div>
+<div id="checkout-container"></div>
 <div id="payment-status"></div>
 ```
 
 ### 3. Uso Básico
 
 ```javascript
+
+const chargeUuid = '8683cbc9-07af-4e52-af0b-77d0fa86df03'; // response api (charge_uuid)
+const checkoutSession =  '4cd1e07d-c090-434d-a33d-6d382abf4aad'; // response api (session_id)
+const apiKey = 'sandbox_gAAAAABnk5Yka5kamCduuZcD2YvWyZrzkF-T0z6cKy_uErMXn5J9hxDg5fTyWRgy1PbQ_k..'; // a55 sent to you 
+const countryCode = 'BR';
+const selector = '#checkout-container';
+
+
 A55Pay.checkout({
-  selector: '#yuno-checkout-container',
-  charge_uuid: 'sua-charge-uuid-aqui',
-  checkoutSession: 'sua-checkout-session-aqui',
-  apiKey: 'sua-api-key-publica-yuno',
-  countryCode: 'BR', // Opcional, padrão: 'BR'
+  selector: selector,
+  chargeUuid: chargeUuid,
+  checkoutSession: checkoutSession,
+  apiKey: apiKey,
+  countryCode: countryCode, // Opcional, padrão: 'BR'
   
   onSuccess: function(result) {
     console.log('Pagamento realizado com sucesso:', result);
@@ -44,6 +95,14 @@ A55Pay.checkout({
   
   onReady: function() {
     console.log('Yuno SDK carregado e pronto para uso');
+  },
+  onLoading: function({ isLoading }) {
+      if (isLoading) {
+          console.log('carregando...');
+          container.classList.add('yuno-loading');
+      } else {
+          console.log('carregamento finalizado');
+      }
   }
 });
 ```
@@ -63,73 +122,9 @@ A55Pay.checkout({
 - **onSuccess** (function): Callback chamado quando o pagamento é bem-sucedido
 - **onError** (function): Callback chamado quando ocorre um erro
 - **onReady** (function): Callback chamado quando o SDK está pronto para uso
+- **onLoading**  (function): Callback chamado quando SDK esta carregando ou aguardando resposta de alguma requisicao
 
-## Fluxo de Integração
 
-### 1. Carregamento Dinâmico
-
-O SDK carrega automaticamente o script do Yuno (`https://sdk-web.y.uno/v1.1/main.js`) quando necessário, evitando dependências externas no HTML.
-
-### 2. Inicialização
-
-- Inicializa a instância do Yuno com a API key fornecida
-- Configura o checkout com os parâmetros especificados
-- Monta o formulário de cartão de crédito
-
-### 3. Processamento de Pagamento
-
-- Quando o usuário submete o formulário, o Yuno gera um token único (OTT)
-- O token é enviado para a API A55 para processamento
-- O resultado é retornado através dos callbacks
-
-## Status de Pagamento
-
-### Status de Sucesso
-- `SUCCEEDED`: Pagamento aprovado
-- `APPROVED`: Pagamento aprovado (sinônimo)
-
-### Status Pendentes
-- `PENDING`: Pagamento pendente
-- `PROCESSING`: Pagamento sendo processado
-- `IN_PROGRESS`: Pagamento em andamento
-
-### Status de Erro
-- `REJECTED`: Pagamento rejeitado
-- `ERROR`: Erro no processamento
-- `DECLINED`: Pagamento recusado
-- `CANCELLED`: Pagamento cancelado
-- `FAILED`: Pagamento falhou
-
-## Tratamento de Erros
-
-O SDK trata automaticamente os seguintes cenários de erro:
-
-1. **Parâmetros faltando**: Validação de parâmetros obrigatórios
-2. **Elemento não encontrado**: Validação do seletor CSS
-3. **Falha no carregamento do Yuno SDK**: Timeout ou erro de rede
-4. **Erro na API A55**: Falhas no processamento do pagamento
-5. **Erros do Yuno**: Erros internos do SDK Yuno
-
-## Estilização
-
-### Classes CSS Automáticas
-
-O SDK adiciona automaticamente a classe `yuno-loading` ao container durante operações de carregamento:
-
-```css
-.yuno-loading {
-  opacity: 0.6;
-  pointer-events: none;
-}
-
-.yuno-loading::after {
-  content: "Processando...";
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-}
-```
 
 ## Exemplo Completo
 
@@ -137,7 +132,7 @@ O SDK adiciona automaticamente a classe `yuno-loading` ao container durante oper
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Pagamento com Yuno</title>
+  <title>Pagamento </title>
   <style>
     #yuno-checkout-container {
       max-width: 400px;
@@ -162,41 +157,49 @@ O SDK adiciona automaticamente a classe `yuno-loading` ao container durante oper
   </style>
 </head>
 <body>
-  <div id="yuno-checkout-container"></div>
-  <div id="yuno-checkout-container-action"></div>
+  <div id="checkout-container"></div>
+  <button id="pay-btn" style="margin: 20px 0; width: 100%; font-size: 18px;">Iniciar</button>
   <div id="payment-status"></div>
 
   <script src="a55pay-sdk.js"></script>
   <script>
+    const chargeUuid = 'dfc047f5-519d-4892-8380-7f8aaf9e6958';
+    const checkoutSession =  'f8502004-e083-47c0-a582-3bd5df4e65eb';
+    const apiKeyPublic = 'sandbox_gAAAAABnk5Yka...';
+    const countryCode = 'BR';
+    const selector = '#yuno-checkout-container'
+
     A55Pay.checkout({
-      selector: '#yuno-checkout-container',
-      charge_uuid: 'your-charge-uuid-here',
-      checkoutSession: 'your-checkout-session-here',
-      apiKey: 'your-yuno-public-api-key',
-      countryCode: 'BR',
+      selector: selector,
+      charge_uuid: chargeUuid,
+      checkoutSession: checkoutSession,
+      apiKey: apiKeyPublic,
+      countryCode: countryCode, // Opcional, padrão: 'BR'
       
       onSuccess: function(result) {
-        const statusEl = document.getElementById('payment-status');
-        statusEl.textContent = `Pagamento ${result.status}`;
-        statusEl.className = 'success';
-        
-        if (!result.pending) {
-          // Pagamento finalizado com sucesso
-          setTimeout(() => {
-            window.location.href = '/success';
-          }, 2000);
-        }
+        console.log('Pagamento realizado com sucesso:', result);
       },
       
       onError: function(error) {
-        const statusEl = document.getElementById('payment-status');
-        statusEl.textContent = `Erro: ${error.message}`;
-        statusEl.className = 'error';
+        console.error('Erro no pagamento:', error);
       },
       
       onReady: function() {
-        console.log('Checkout pronto para uso');
+        console.log('Yuno SDK carregado e pronto para uso');
+      },
+      onLoading: function({ isLoading }) {
+          if (isLoading) {
+              console.log('carregando...');
+              container.classList.add('yuno-loading');
+          } else {
+              console.log('carregamento finalizado');
+          }
       }
+    });
+
+     // Adicionar evento de click no botão de pagamento
+    document.getElementById('pay-btn').addEventListener('click', function() {
+        A55Pay.startPayment();
     });
   </script>
 </body>

@@ -159,7 +159,7 @@ Modern payment processing through Yuno platform with support for multiple paymen
 
 # payment-sdk
 
-<script src="dist/a55pay-sdk.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/a55pay-sdk"></script>
 
 ```
 
