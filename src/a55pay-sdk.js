@@ -31,7 +31,6 @@
       const payload = {
         payer_name: a55Data.customer?.name,
         payer_email: a55Data.customer?.email,
-        installment_count: a55Data.installment_count,
         cell_phone: userData.phone?.replace(/\D/g, ''),
         card: {
           holder_name: userData.holder,
