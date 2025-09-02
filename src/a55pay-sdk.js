@@ -92,6 +92,7 @@
           bpmpi_accesstoken: a55Data.threeds_metadata?.access_token || '',
           bpmpi_ordernumber: a55Data.charge_uuid,
           bpmpi_currency: a55Data.currency || 'BRL',
+          bpmpi_default_card: userData.default_card || 'true',
           bpmpi_totalamount: (a55Data.value * 100).toFixed(0),
           bpmpi_cardnumber: userData.number?.replace(/\s/g, ''),
           bpmpi_cardexpirationmonth: userData.month,
@@ -113,6 +114,7 @@
           bpmpi_billto_state: userData.state,
           bpmpi_billto_zipcode: userData.zipcode?.replace(/\D/g, ''),
           bpmpi_billto_country: userData.country || 'BR',
+          bpmpi_order_recurrence: a55Data.recurrence || 'false'
         };
         // Remove any existing bpmpi_* hidden fields in the container
         Object.keys(bpmpi).forEach((name) => {
@@ -480,6 +482,205 @@
 
     // Iniciar o processo de checkout
     initCheckout();
+  };
+
+  /**
+   * Authentication function for CyberSource Device Data Collection setup
+   * @param {Object} config - { transactionReference, cardBrand, cardExpiryMonth, cardExpiryYear, cardNumber, onSuccess, onError }
+   */
+  SDK.authentication = function (config) {
+    const { 
+      transactionReference, 
+      cardBrand, 
+      cardExpiryMonth, 
+      cardExpiryYear, 
+      cardNumber, 
+      onSuccess, 
+      onError 
+    } = config;
+
+    function callOnError(err) { 
+      if (typeof onError === 'function') onError(err); 
+    }
+    function callOnSuccess(res) { 
+      if (typeof onSuccess === 'function') onSuccess(res); 
+    }
+
+    // Validação de parâmetros obrigatórios
+    if (!transactionReference || !cardBrand || !cardExpiryMonth || !cardExpiryYear || !cardNumber) {
+      callOnError(new Error('Missing required parameters: transactionReference, cardBrand, cardExpiryMonth, cardExpiryYear, or cardNumber'));
+      return;
+    }
+
+    // Validar cardBrand
+    const validBrands = ['Visa', 'MasterCard', 'AmericanExpress', 'Discover', 'JCB', 'DinersClub', 'Hipercard', 'Elo'];
+    if (!validBrands.includes(cardBrand)) {
+      callOnError(new Error(`Invalid cardBrand. Must be one of: ${validBrands.join(', ')}`));
+      return;
+    }
+
+    // Preparar payload para o backend
+    const payload = {
+      transaction_reference: transactionReference,
+      card_brand: cardBrand,
+      card_expiry_month: cardExpiryMonth,
+      card_expiry_year: cardExpiryYear,
+      card_number: cardNumber
+    };
+
+    // Chamar o backend para setup da autenticação
+    fetch('https://core-manager.a55.tech/api/v1/bank/public/setup-authentication', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    })
+    .then(async (response) => {
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.message || 'Setup authentication failed');
+      }
+      return response.json();
+    })
+    .then((authData) => {
+      // authData contém: access_token, reference_id, device_data_collection_url
+      const { access_token, reference_id, device_data_collection_url } = authData;
+
+      if (!device_data_collection_url) {
+        callOnError(new Error('Device data collection URL not provided'));
+        return;
+      }
+
+      // Iniciar Device Data Collection da CyberSource
+      startDeviceDataCollection(device_data_collection_url, reference_id, access_token);
+    })
+    .catch((error) => {
+      callOnError(error);
+    });
+
+    function startDeviceDataCollection(collectionUrl, referenceId, accessToken) {
+      // Remover elementos anteriores se existirem
+      const existingIframe = document.getElementById('ddc-iframe');
+      if (existingIframe) {
+        existingIframe.remove();
+      }
+      const existingForm = document.getElementById('ddc-form');
+      if (existingForm) {
+        existingForm.remove();
+      }
+
+      // Criar iframe conforme documentação da CyberSource
+      const iframe = document.createElement('iframe');
+      iframe.name = 'ddc-iframe';
+      iframe.id = 'ddc-iframe';
+      iframe.height = '1';
+      iframe.width = '1';
+      iframe.style.display = 'none';
+      document.body.appendChild(iframe);
+
+      // Criar formulário conforme documentação
+      const form = document.createElement('form');
+      form.id = 'ddc-form';
+      form.target = 'ddc-iframe';
+      form.method = 'POST';
+      form.action = collectionUrl;
+
+      // Adicionar campo JWT conforme documentação
+      const jwtInput = document.createElement('input');
+      jwtInput.type = 'hidden';
+      jwtInput.name = 'JWT';
+      jwtInput.value = accessToken;
+      form.appendChild(jwtInput);
+
+      document.body.appendChild(form);
+
+      // Variável para controlar se já processamos o resultado
+      let processed = false;
+
+      function handleDeviceDataComplete(data) {
+        if (processed) return;
+        processed = true;
+        
+        cleanup();
+        callOnSuccess({
+          sessionId: referenceId,
+          accessToken: accessToken,
+          referenceId: referenceId,
+          deviceDataCollection: data || 'completed'
+        });
+      }
+
+      function cleanup() {
+        // Remover elementos criados
+        if (form && form.parentNode) {
+          form.parentNode.removeChild(form);
+        }
+        if (iframe && iframe.parentNode) {
+          iframe.parentNode.removeChild(iframe);
+        }
+        window.removeEventListener('message', messageHandler);
+      }
+
+      // Handler para mensagens do iframe conforme documentação
+      function messageHandler(event) {
+        // Verificar se a mensagem vem do domínio da CyberSource
+        if (event.origin === 'https://centinelapistag.cardinalcommerce.com') {
+          let data = JSON.parse(event.data);
+          console.log('Merchant received a message:', data);
+          
+          if (data.MessageType === 'profile.completed') {
+            console.log('SongBird ran DF successfully');
+            handleDeviceDataComplete(data);
+          }
+        } else {
+          console.log('Message from different origin');
+        }
+      }
+
+      // Escutar mensagens do iframe
+      window.addEventListener('message', messageHandler);
+
+      // JavaScript para submeter o formulário automaticamente
+      window.onload = function() {
+        const ddcForm = document.querySelector('#ddc-form');
+        if (ddcForm) {
+          ddcForm.submit();
+        }
+      };
+
+      // Timeout de segurança (30 segundos conforme boas práticas)
+      const timeout = setTimeout(() => {
+        if (!processed) {
+          processed = true;
+          cleanup();
+          // Retornar sucesso mesmo com timeout, pois a coleta pode ter funcionado
+          callOnSuccess({
+            sessionId: referenceId,
+            accessToken: accessToken,
+            referenceId: referenceId,
+            timeout: true,
+            deviceDataCollection: 'timeout_but_likely_successful'
+          });
+        }
+      }, 30000);
+
+      // Submeter o formulário para iniciar a coleta
+      try {
+        form.submit();
+        
+        // Cleanup do timeout quando o processo é completado
+        const originalHandleComplete = handleDeviceDataComplete;
+        handleDeviceDataComplete = function(data) {
+          clearTimeout(timeout);
+          originalHandleComplete(data);
+        };
+      } catch (error) {
+        clearTimeout(timeout);
+        cleanup();
+        callOnError(new Error('Failed to start device data collection: ' + error.message));
+      }
+    }
   };
 
   // Expose globally

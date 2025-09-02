@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>A55Pay Authentication Example</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #333;
+        }
+        input, select {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            width: 100%;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 5px;
+            white-space: pre-wrap;
+            font-family: monospace;
+        }
+        .success {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .error {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .loading {
+            background-color: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>A55Pay Authentication Test</h1>
+        <p>Este exemplo demonstra como usar a nova funcionalidade A55Pay.authentication para setup da CyberSource Device Data Collection seguindo as práticas recomendadas da Cardinal Commerce.</p>
+        
+        <form id="authForm">
+            <div class="form-group">
+                <label for="transactionReference">Transaction Reference:</label>
+                <input type="text" id="transactionReference" value="7f879488-ab26-4609-b742-2b355ac1631a" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="cardBrand">Card Brand:</label>
+                <select id="cardBrand" required>
+                    <option value="">Selecione...</option>
+                    <option value="Visa" selected>Visa</option>
+                    <option value="MasterCard">MasterCard</option>
+                    <option value="AmericanExpress">American Express</option>
+                    <option value="Discover">Discover</option>
+                    <option value="JCB">JCB</option>
+                    <option value="DinersClub">Diners Club</option>
+                    <option value="Hipercard">Hipercard</option>
+                    <option value="Elo">Elo</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="cardExpiryMonth">Expiry Month:</label>
+                <input type="text" id="cardExpiryMonth" value="08" maxlength="2" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="cardExpiryYear">Expiry Year:</label>
+                <input type="text" id="cardExpiryYear" value="2029" maxlength="4" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="cardNumber">Card Number:</label>
+                <input type="text" id="cardNumber" value="4111111111111111" required>
+            </div>
+            
+            <button type="submit" id="submitBtn">Iniciar Autenticação</button>
+        </form>
+        
+        <div id="result"></div>
+    </div>
+
+    <!-- A55Pay SDK -->
+    <script src="../src/a55pay-sdk.js"></script>
+    
+    <script>
+        document.getElementById('authForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const submitBtn = document.getElementById('submitBtn');
+            const resultDiv = document.getElementById('result');
+            
+            // Desabilitar botão e mostrar loading
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Processando...';
+            resultDiv.innerHTML = '<div class="loading">Iniciando processo de autenticação...</div>';
+            
+            // Coletar dados do formulário
+            const config = {
+                transactionReference: document.getElementById('transactionReference').value,
+                cardBrand: document.getElementById('cardBrand').value,
+                cardExpiryMonth: document.getElementById('cardExpiryMonth').value,
+                cardExpiryYear: document.getElementById('cardExpiryYear').value,
+                cardNumber: document.getElementById('cardNumber').value,
+                onSuccess: function(result) {
+                    console.log('Authentication success:', result);
+                    console.log('Authentication SessionId:', result.sessionId);
+                },
+                
+                onError: function(error) {
+                    console.error('Authentication error:', error);
+                }
+            };
+            
+            // Chamar a função de autenticação
+            try {
+                A55Pay.authentication(config);
+                resultDiv.innerHTML = '<div class="loading">Chamando backend para setup da autenticação e iniciando Device Data Collection da CyberSource...</div>';
+            } catch (error) {
+                console.error('SDK error:', error);
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Iniciar Autenticação';
+                resultDiv.innerHTML = `<div class="error">❌ Erro no SDK: ${error.message}</div>`;
+            }
+        });
+    </script>
+</body>
+</html>
