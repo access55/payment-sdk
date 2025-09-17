@@ -663,7 +663,7 @@
             deviceDataCollection: 'timeout_but_likely_successful'
           });
         }
-      }, 30000);
+      }, 10000);
 
       // Submeter o formulário para iniciar a coleta
       try {
