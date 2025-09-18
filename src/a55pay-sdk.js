@@ -655,6 +655,7 @@
           processed = true;
           cleanup();
           // Retornar sucesso mesmo com timeout, pois a coleta pode ter funcionado
+          console.log('Timeout occurred, but likely successful');
           callOnSuccess({
             sessionId: referenceId,
             accessToken: accessToken,
