@@ -5,6 +5,184 @@
 
 (function (global) {
   const SDK = {};
+  
+  // Função para gerar UUID v4
+  function generateUUID() {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      const r = Math.random() * 16 | 0;
+      const v = c == 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  }
+
+  // Função para carregar script da ThreatMetrix
+  function loadThreatMetrixScript(sessionId) {
+    // Verificar se já existe um script carregado
+    const existingScript = document.querySelector('script[src*="online-metrix.net"]');
+    if (existingScript) {
+      existingScript.remove();
+    }
+
+    // Criar novo script
+    const script = document.createElement('script');
+    script.type = 'text/javascript';
+    script.async = true;
+    script.src = `https://h.online-metrix.net/fp/tags.js?org_id=1snn5n9w&session_id=a55payment_br${encodeURIComponent(sessionId)}`;
+    
+    // Adicionar ao head
+    document.head.appendChild(script);
+    
+    // Log para debug
+    console.log('ThreatMetrix script loaded with session_id:', `a55payment_br${sessionId}`);
+    
+    // Opcional: listener para quando script carregar
+    script.onload = function() {
+      console.log('ThreatMetrix fingerprinting script loaded successfully');
+    };
+    
+    script.onerror = function() {
+      console.warn('Failed to load ThreatMetrix script, but continuing with generated session_id');
+    };
+  }
+
+  // Função para gerar device_id único usando ThreatMetrix
+  function generateDeviceId() {
+    // Gerar UUID para session_id
+    const sessionUUID = generateUUID();
+    const sessionId = sessionUUID; // Sem prefixo aqui pois será adicionado na URL
+    
+    // Carregar script da ThreatMetrix
+    loadThreatMetrixScript(sessionId);
+    
+    // Retornar device_id completo
+    const deviceId = sessionId;
+    console.log('Device ID gerado:', deviceId);
+    
+    return deviceId;
+  }
+
+  // Variável global para armazenar o device_id - inicializada imediatamente
+  let globalDeviceId = generateDeviceId();
+
+  // Variáveis globais para callbacks do payV2
+  let currentPayV2Callbacks = null;
+
+  // Listener global para mensagens 3DS
+  window.addEventListener('message', function (event) {
+    if (event.data && event.data.event === '3ds-auth-complete') {
+      const chargeUuid = event.data.chargeUuid;
+      console.log('3DS authentication complete for charge:', chargeUuid);
+      
+      if (currentPayV2Callbacks) {
+        // Verificar status da charge após 3DS
+        checkChargeStatusAndHandle(chargeUuid, currentPayV2Callbacks);
+      }
+    }
+  });
+
+  // Função para verificar status da charge e tratar redirecionamento
+  async function checkChargeStatusAndHandle(chargeUuid, callbacks) {
+    const { callOnSuccess, callOnError } = callbacks;
+    
+    // Função para fechar modal após 3 segundos
+    function closeModalAfterDelay(isSuccess = true, message = '') {
+      // Mostrar feedback visual no modal
+      const overlay = document.getElementById('threeds-overlay');
+      if (overlay) {
+        const iframe = overlay.querySelector('#threeds-iframe');
+        if (iframe) {
+          // Substituir iframe por mensagem de feedback
+          const feedbackDiv = document.createElement('div');
+          feedbackDiv.style.cssText = `
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            text-align: center;
+            font-family: Arial, sans-serif;
+            padding: 20px;
+          `;
+    
+          
+          iframe.parentNode.replaceChild(feedbackDiv, iframe);
+        }
+      }
+      
+      setTimeout(() => {
+        if (overlay && overlay.parentNode) {
+          overlay.parentNode.removeChild(overlay);
+          console.log('3DS modal closed automatically after 3 seconds');
+        }
+        // Limpar callbacks globais
+        currentPayV2Callbacks = null;
+      }, 2000);
+    }
+    
+    try {
+      // Buscar dados atualizados da charge
+      const response = await fetch(`https://core-manager.a55.tech/api/v1/bank/public/charge?charge_uuid=${encodeURIComponent(chargeUuid)}`);
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch charge status');
+      }
+      
+      const data = await response.json();
+      if (!Array.isArray(data) || !data.length) {
+        throw new Error('No charge data found');
+      }
+      
+      const chargeData = data[0];
+      const status = chargeData.status;
+      const redirectUrl = chargeData.redirect_url;
+      
+      console.log('Charge status after 3DS:', status);
+      console.log('Redirect URL:', redirectUrl);
+      
+      // Verificar status e chamar callback apropriado
+      if (status === 'confirmed' || status === 'paid') {
+        // Sucesso - verificar se deve redirecionar
+        if (redirectUrl) {
+          console.log('Redirecting to:', redirectUrl);
+          // Fechar modal antes de redirecionar
+          closeModalAfterDelay(true, 'Redirecionando para a página de sucesso...');
+          setTimeout(() => {
+            window.location.replace(redirectUrl);
+          }, 3000);
+        } else {
+          // Fechar modal e chamar callback de sucesso
+          closeModalAfterDelay(true, 'Pagamento aprovado com sucesso!');
+          callOnSuccess({
+            status: status,
+            charge_uuid: chargeUuid,
+            data: chargeData,
+            threeds_completed: true
+          });
+        }
+      } else if (status === 'error' || status === 'failed' || status === 'declined') {
+        // Fechar modal e chamar callback de erro
+        const errorMessage = chargeData.message || 'Payment failed';
+        closeModalAfterDelay(false, errorMessage);
+        callOnError(new Error(`Payment ${status}: ${errorMessage}`));
+      } else {
+        // Status ainda pendente ou outro - não fechar modal ainda
+        console.log('Payment still processing, status:', status);
+        callOnSuccess({
+          status: status,
+          charge_uuid: chargeUuid,
+          data: chargeData,
+          pending: true,
+          threeds_completed: true
+        });
+      }
+      
+    } catch (error) {
+      console.error('Error checking charge status:', error);
+      // Fechar modal em caso de erro
+      closeModalAfterDelay(false, 'Erro ao verificar status do pagamento');
+      callOnError(error);
+    }
+  }
 
   /**
    * Main payment function. Reads bpmpi_* hidden fields, loads 3DS, and triggers payment flow.
@@ -485,6 +663,360 @@
   };
 
   /**
+   * PayV2 function with automatic authentication and enhanced device info collection
+   * @param {Object} config - { charge_uuid, userData, onSuccess, onError, onReady }
+   */
+  SDK.payV2 = function (config) {
+    const { charge_uuid, userData, onSuccess, onError, onReady } = config;
+    
+    function callOnError(err) { if (typeof onError === 'function') onError(err); }
+    function callOnSuccess(res) { if (typeof onSuccess === 'function') onSuccess(res); }
+    function callOnReady() { if (typeof onReady === 'function') onReady(); }
+
+    // Armazenar callbacks globalmente para o listener 3DS
+    currentPayV2Callbacks = {
+      callOnSuccess,
+      callOnError,
+      charge_uuid
+    };
+
+    // Validações obrigatórias
+    if (!charge_uuid || !userData) {
+      callOnError(new Error('Missing charge_uuid or userData in config'));
+      return;
+    }
+
+    // Validar payer_name e payer_email obrigatórios
+    if (!userData.payer_name || !userData.payer_email) {
+      callOnError(new Error('payer_name and payer_email are required in userData'));
+      return;
+    }
+
+    // Validar ccv ou card_cryptogram
+    if (!userData.ccv && !userData.card_cryptogram) {
+      callOnError(new Error('Either ccv or card_cryptogram is required in userData'));
+      return;
+    }
+
+    // Função para coletar informações do dispositivo
+    function collectDeviceInfo() {
+      const screen = window.screen;
+      const navigator = window.navigator;
+      
+      return {
+        device_id: globalDeviceId, // use global device_id
+        ip_address: '', // Será preenchido após obter IP
+        session_id: '', // Será preenchido após autenticação
+        user_agent: navigator.userAgent,
+        http_accept_content: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        http_browser_language: navigator.language || navigator.browserLanguage,
+        http_browser_java_enabled: navigator.javaEnabled(),
+        http_browser_javascript_enabled: true,
+        http_browser_color_depth: screen.colorDepth.toString(),
+        http_browser_screen_height: screen.height.toString(),
+        http_browser_screen_width: screen.width.toString(),
+        http_browser_time_difference: new Date().getTimezoneOffset().toString(),
+        http_accept_browser_value: navigator.userAgent
+      };
+    }
+
+    // Função para obter IP address do usuário
+    async function getClientIPAddress() {
+      try {
+        // Método 1: Usar serviço público de IP (mais confiável)
+        const response = await fetch('https://api.ipify.org?format=json', {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json'
+          }
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          return data.ip;
+        }
+      } catch (error) {
+        console.warn('Failed to get IP from ipify, trying alternative method:', error);
+      }
+
+      try {
+        // Método 2: Usar serviço alternativo
+        const response = await fetch('https://httpbin.org/ip', {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json'
+          }
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          return data.origin.split(',')[0].trim(); // Pega o primeiro IP se houver múltiplos
+        }
+      } catch (error) {
+        console.warn('Failed to get IP from httpbin, trying WebRTC method:', error);
+      }
+
+      try {
+        // Método 3: WebRTC (funciona mesmo com proxy/VPN em alguns casos)
+        return await getIPViaWebRTC();
+      } catch (error) {
+        console.warn('Failed to get IP via WebRTC:', error);
+      }
+
+      // Se todos os métodos falharam, retornar string vazia
+      return '';
+    }
+
+    // Função para obter IP via WebRTC
+    function getIPViaWebRTC() {
+      return new Promise((resolve, reject) => {
+        const RTCPeerConnection = window.RTCPeerConnection || 
+                                  window.webkitRTCPeerConnection || 
+                                  window.mozRTCPeerConnection;
+
+        if (!RTCPeerConnection) {
+          reject(new Error('WebRTC not supported'));
+          return;
+        }
+
+        const pc = new RTCPeerConnection({
+          iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+        });
+
+        let ipFound = false;
+
+        pc.onicecandidate = function(event) {
+          if (!event.candidate || ipFound) return;
+
+          const candidate = event.candidate.candidate;
+          const ipMatch = candidate.match(/(\d+\.\d+\.\d+\.\d+)/);
+          
+          if (ipMatch && !ipMatch[1].startsWith('192.168.') && 
+              !ipMatch[1].startsWith('10.') && 
+              !ipMatch[1].startsWith('172.')) {
+            ipFound = true;
+            pc.close();
+            resolve(ipMatch[1]);
+          }
+        };
+
+        // Criar data channel para iniciar processo ICE
+        pc.createDataChannel('');
+        pc.createOffer()
+          .then(offer => pc.setLocalDescription(offer))
+          .catch(reject);
+
+        // Timeout após 3 segundos
+        setTimeout(() => {
+          if (!ipFound) {
+            pc.close();
+            reject(new Error('WebRTC IP detection timeout'));
+          }
+        }, 3000);
+      });
+    }
+
+
+    // Função para processar pagamento
+    async function processPayment(sessionId) {
+      const deviceInfo = collectDeviceInfo();
+      deviceInfo.session_id = sessionId;
+      
+      // Obter IP address do cliente
+      try {
+        deviceInfo.ip_address = await getClientIPAddress();
+        console.log('Client IP detected:', deviceInfo.ip_address);
+      } catch (error) {
+        console.warn('Could not detect client IP:', error);
+        deviceInfo.ip_address = ''; // Deixa vazio se não conseguir obter
+      }
+
+      const payload = {
+        device_info: deviceInfo,
+        // Campos obrigatórios do pagador
+        payer_name: userData.payer_name,
+        payer_email: userData.payer_email,
+        // Campos opcionais do pagador
+        ...(userData.payer_tax_id && { payer_tax_id: userData.payer_tax_id }),
+        ...(userData.cell_phone && { cell_phone: userData.cell_phone.replace(/\D/g, '') }),
+        card: {
+          holder_name: userData.holder_name,
+          number: userData.number?.replace(/\s/g, ''),
+          expiry_month: userData.expiry_month,
+          expiry_year: userData.expiry_year,
+          ccv: userData.ccv,
+          card_token: userData.card_token,
+          card_cryptogram: userData.card_cryptogram
+        },
+        address: {
+          postal_code: userData.postal_code?.replace(/\D/g, ''),
+          street: userData.street,
+          address_number: userData.address_number || 'n/d',
+          complement: userData.complement || '',
+          neighborhood: userData.neighborhood || 'n/d',
+          city: userData.city,
+          state: userData.state,
+          country: userData.country || 'BR'
+        }
+      };
+
+      fetch(`https://core-manager.a55.tech/api/v1/bank/public/charge/${charge_uuid}/pay`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      })
+      .then(async (resp) => {
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({}));
+          throw new Error(err.message || 'Payment failed');
+        }
+        return resp.json();
+      })
+      .then((result) => {
+        if (result.status === 'pending' && result.url_3ds) {
+          // Abrir iframe para 3DS
+          open3DSIframe(result.url_3ds, result);
+        }else if (result.status === 'confirmed' || result.status === 'paid') {
+          callOnSuccess(result);
+        }
+        else {
+          callOnError(result);
+        }
+      })
+      .catch((err) => {
+        callOnError(err);
+      });
+    }
+
+    // Função para abrir iframe 3DS
+    function open3DSIframe(url3ds, paymentResult) {
+      // Remover iframe anterior se existir
+      const existingIframe = document.getElementById('threeds-iframe');
+      if (existingIframe) {
+        existingIframe.remove();
+      }
+
+      // Criar overlay
+      const overlay = document.createElement('div');
+      overlay.id = 'threeds-overlay';
+      overlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.8);
+        z-index: 999999;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      `;
+
+      // Criar container do iframe
+      const container = document.createElement('div');
+      container.style.cssText = `
+        background: white;
+        border-radius: 8px;
+        padding: 20px;
+        max-width: 500px;
+        max-height: 600px;
+        width: 90%;
+        height: 80%;
+        position: relative;
+      `;
+
+      // Botão fechar
+      const closeBtn = document.createElement('button');
+      closeBtn.textContent = '×';
+      closeBtn.style.cssText = `
+        position: absolute;
+        top: 10px;
+        right: 15px;
+        background: none;
+        border: none;
+        font-size: 24px;
+        cursor: pointer;
+        z-index: 1000000;
+      `;
+      closeBtn.onclick = function() {
+        document.body.removeChild(overlay);
+        // Limpar callbacks globais
+        currentPayV2Callbacks = null;
+        callOnError(new Error('3DS authentication cancelled by user'));
+      };
+
+      // Criar iframe
+      const iframe = document.createElement('iframe');
+      iframe.id = 'threeds-iframe';
+      iframe.src = url3ds;
+      iframe.style.cssText = `
+        width: 100%;
+        height: calc(100% - 40px);
+        border: none;
+        margin-top: 20px;
+      `;
+
+      container.appendChild(closeBtn);
+      container.appendChild(iframe);
+      overlay.appendChild(container);
+      document.body.appendChild(overlay);
+
+      // O listener global já trata as mensagens 3DS
+      console.log('3DS iframe opened for URL:', url3ds);
+
+      // Timeout para 3DS (5 minutos)
+      setTimeout(() => {
+        if (document.getElementById('threeds-overlay')) {
+          document.body.removeChild(overlay);
+          // Limpar callbacks globais
+          currentPayV2Callbacks = null;
+          callOnError(new Error('3DS authentication timeout'));
+        }
+      }, 300000);
+    }
+
+    // Iniciar processo: primeiro executar authentication
+    callOnReady();
+    
+    SDK.authentication({
+      transactionReference: charge_uuid,
+      cardBrand: getCardBrand(userData.number),
+      cardExpiryMonth: userData.expiry_month,
+      cardExpiryYear: userData.expiry_year,
+      cardNumber: userData.number?.replace(/\s/g, ''),
+      onSuccess: async function(authResult) {
+        // Authentication completado, processar pagamento
+        await processPayment(authResult.sessionId);
+      },
+      onError: async function(authError) {
+        // Se authentication falhar, prosseguir sem device data collection
+        console.warn('Authentication failed, proceeding without device data collection:', authError.message);
+        await processPayment('');
+      }
+    });
+
+    // Função auxiliar para detectar bandeira do cartão
+    function getCardBrand(cardNumber) {
+      if (!cardNumber) return 'Visa';
+      
+      const number = cardNumber.replace(/\D/g, '');
+      
+      if (/^4/.test(number)) return 'Visa';
+      if (/^5[1-5]/.test(number) || /^2[2-7]/.test(number)) return 'MasterCard';
+      if (/^3[47]/.test(number)) return 'AmericanExpress';
+      if (/^6(?:011|5)/.test(number)) return 'Discover';
+      if (/^35/.test(number)) return 'JCB';
+      if (/^3[0689]/.test(number)) return 'DinersClub';
+      if (/^606282|^637095|^637568|^637599|^637609|^637612/.test(number)) return 'Hipercard';
+      if (/^636368|^438935|^504175|^451416|^636297/.test(number)) return 'Elo';
+      
+      return 'Visa'; // Default
+    }
+  };
+
+  /**
    * Authentication function for CyberSource Device Data Collection setup
    * @param {Object} config - { transactionReference, cardBrand, cardExpiryMonth, cardExpiryYear, cardNumber, onSuccess, onError }
    */
@@ -682,6 +1214,23 @@
         callOnError(new Error('Failed to start device data collection: ' + error.message));
       }
     }
+  };
+
+  /**
+   * Get the current global device_id
+   * @returns {string} The current device_id
+   */
+  SDK.getDeviceId = function() {
+    return globalDeviceId;
+  };
+
+  /**
+   * Force regenerate a new device_id
+   * @returns {string} New device_id
+   */
+  SDK.regenerateDeviceId = function() {
+    globalDeviceId = generateDeviceId(); // Gera novo
+    return globalDeviceId;
   };
 
   // Expose globally

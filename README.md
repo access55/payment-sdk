@@ -346,5 +346,14 @@ A55Pay.pay({
 });
 ```
 
+# Navegar para o diretório do projeto
+cd /home/leolimasilva123/projetos/payment-sdk
+
+# Iniciar servidor na porta 8000
+python3 -m http.server 8000
+
+# Ou especificar uma porta diferente
+python3 -m http.server 3000
+
 ## License
 MIT
