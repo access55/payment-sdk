@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Exemplo de Device ID - A55Pay SDK</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .device-info {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 20px;
+            margin: 20px 0;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 15px 30px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 10px 10px 0;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .code-example {
+            background: #2d3748;
+            color: #e2e8f0;
+            padding: 20px;
+            border-radius: 5px;
+            margin: 20px 0;
+            font-family: 'Courier New', monospace;
+            overflow-x: auto;
+        }
+        .highlight {
+            color: #68d391;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Exemplo de Device ID - A55Pay SDK</h1>
+        
+        <p>Este exemplo demonstra como capturar o <strong>globalDeviceId</strong> que é gerado automaticamente pelo SDK A55Pay.</p>
+        
+        <div class="code-example">
+<span class="highlight">// Como pegar o device_id no JavaScript:</span>
+
+// 1. Método simples - pegar o device_id atual
+const deviceId = A55Pay.getDeviceId();
+console.log('Device ID:', deviceId);
+
+// 2. Regenerar um novo device_id
+const newDeviceId = A55Pay.regenerateDeviceId();
+console.log('Novo Device ID:', newDeviceId);
+        </div>
+
+        <h2>🚀 Teste Agora:</h2>
+        
+        <button onclick="getDeviceId()">Pegar Device ID Atual</button>
+        <button onclick="regenerateDeviceId()">Regenerar Novo Device ID</button>
+        <button onclick="showAllInfo()">Mostrar Todas as Informações</button>
+        
+        <div id="deviceInfo" class="device-info">
+            Aguardando ação...
+        </div>
+
+        <h3>📝 Sobre o Device ID:</h3>
+        <ul>
+            <li><strong>Geração Automática:</strong> O device_id é gerado automaticamente quando o SDK é carregado</li>
+            <li><strong>ThreatMetrix:</strong> Utiliza ThreatMetrix para fingerprinting do dispositivo</li>
+            <li><strong>UUID v4:</strong> Baseado em UUID v4 para garantir unicidade</li>
+            <li><strong>Persistência:</strong> Permanece o mesmo durante a sessão até ser regenerado</li>
+            <li><strong>Segurança:</strong> Usado para prevenção de fraudes e análise de risco</li>
+        </ul>
+
+        <h3>🔧 Como usar no seu código:</h3>
+        <div class="code-example">
+<span class="highlight">// Exemplo prático de uso:</span>
+
+// Pegar device_id antes de processar pagamento
+const deviceId = A55Pay.getDeviceId();
+
+// Enviar para seu backend junto com dados do pagamento
+const paymentData = {
+    amount: 100.00,
+    currency: 'BRL',
+    device_id: deviceId,
+    // ... outros dados
+};
+
+// Ou usar diretamente no PayV2 (já é incluído automaticamente)
+A55Pay.payV2({
+    charge_uuid: 'sua-charge-uuid',
+    userData: {
+        payer_name: 'João Silva',
+        payer_email: 'joao@email.com',
+        // ... outros dados
+    },
+    onSuccess: function(result) {
+        console.log('Pagamento processado com device_id:', deviceId);
+    }
+});
+        </div>
+    </div>
+
+    <!-- Carregando o A55Pay SDK -->
+    <script src="../src/a55pay-sdk.js"></script>
+    
+    <script>
+        // Função para pegar o device_id atual
+        function getDeviceId() {
+            const deviceId = A55Pay.getDeviceId();
+            
+            // Fazer console.log do device_id
+            console.log('🆔 Device ID atual:', deviceId);
+            
+            // Mostrar na tela
+            document.getElementById('deviceInfo').textContent = 
+                `Device ID Atual:\n${deviceId}\n\n✅ Console.log executado! Verifique o console do navegador (F12).`;
+        }
+        
+        // Função para regenerar novo device_id
+        function regenerateDeviceId() {
+            const oldDeviceId = A55Pay.getDeviceId();
+            const newDeviceId = A55Pay.regenerateDeviceId();
+            
+            // Fazer console.log dos device_ids
+            console.log('🔄 Device ID anterior:', oldDeviceId);
+            console.log('🆕 Novo Device ID:', newDeviceId);
+            
+            // Mostrar na tela
+            document.getElementById('deviceInfo').textContent = 
+                `Device ID Anterior:\n${oldDeviceId}\n\nNovo Device ID:\n${newDeviceId}\n\n✅ Console.log executado! Verifique o console do navegador (F12).`;
+        }
+        
+        // Função para mostrar todas as informações
+        function showAllInfo() {
+            const deviceId = A55Pay.getDeviceId();
+            const timestamp = new Date().toISOString();
+            const userAgent = navigator.userAgent;
+            const screen = window.screen;
+            
+            const allInfo = {
+                device_id: deviceId,
+                timestamp: timestamp,
+                user_agent: userAgent,
+                screen_resolution: `${screen.width}x${screen.height}`,
+                color_depth: screen.colorDepth,
+                timezone_offset: new Date().getTimezoneOffset(),
+                language: navigator.language
+            };
+            
+            // Fazer console.log de todas as informações
+            console.log('📊 Informações Completas do Device:', allInfo);
+            console.log('🆔 Device ID:', deviceId);
+            
+            // Mostrar na tela
+            document.getElementById('deviceInfo').textContent = 
+                `Informações Completas do Device:\n${JSON.stringify(allInfo, null, 2)}\n\n✅ Console.log executado! Verifique o console do navegador (F12).`;
+        }
+        
+        // Exibir device_id automaticamente quando a página carrega
+        window.addEventListener('load', function() {
+            setTimeout(function() {
+                const deviceId = A55Pay.getDeviceId();
+                console.log('🚀 SDK Carregado! Device ID gerado automaticamente:', deviceId);
+                
+                document.getElementById('deviceInfo').textContent = 
+                    `SDK Carregado!\nDevice ID gerado automaticamente:\n${deviceId}\n\n✅ Console.log executado automaticamente! Verifique o console do navegador (F12).`;
+            }, 1000); // Aguarda 1 segundo para garantir que o SDK foi totalmente carregado
+        });
+    </script>
+</body>
+</html>

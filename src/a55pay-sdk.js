@@ -27,7 +27,7 @@
     const script = document.createElement('script');
     script.type = 'text/javascript';
     script.async = true;
-    script.src = `https://h.online-metrix.net/fp/tags.js?org_id=1snn5n9w&session_id=a55payment_br${encodeURIComponent(sessionId)}`;
+    script.src = `https://h.online-metrix.net/fp/tags.js?org_id=k8vif92e&session_id=a55payment_br${encodeURIComponent(sessionId)}`;
     
     // Adicionar ao head
     document.head.appendChild(script);
