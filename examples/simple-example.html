@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>A55Pay SDK - Exemplo Simples</title>
+</head>
+<body>
+    <h1>A55Pay SDK - Exemplo Simples</h1>
+    <p>Abra o console do navegador (F12) para ver os logs.</p>
+    <button onclick="testarPagamento()">Testar Pagamento</button>
+    
+    <!-- A55Pay SDK -->
+    <script src="../src/a55pay-sdk.js"></script>
+    
+    <script>
+        function testarPagamento() {
+            // Dados mockados para teste
+            const userData = {
+                // Dados obrigatórios do pagador
+                payer_name: "Maria Silva Santos",
+                payer_email: "maria@gmail.com",
+                
+                // Dados opcionais do pagador
+                payer_tax_id: "123.456.789-01",
+                cell_phone: "(11) 98765-4321",
+                
+                // Dados do cartão
+                holder_name: "MARIA S SANTOS",
+                number: "4111111111111111",
+                expiry_month: "12",
+                expiry_year: "2028",
+                ccv: "123",
+                
+                // Endereço de cobrança
+                postal_code: "01310-100",
+                street: "Av. Paulista",
+                address_number: "1578",
+                complement: "Sala 1001",
+                neighborhood: "Bela Vista",
+                city: "São Paulo",
+                state: "SP",
+                country: "BR",
+                
+                // Endereço de entrega (opcional)
+                shipping_postal_code: "04038-001",
+                shipping_street: "Rua Fidêncio Ramos",
+                shipping_address_number: "308",
+                shipping_complement: "Torre A - Apto 502",
+                shipping_neighborhood: "Vila Olímpia",
+                shipping_city: "São Paulo",
+                shipping_state: "SP",
+                shipping_country: "BR"
+            };
+
+            // Configuração do pagamento
+            const config = {
+                charge_uuid: "550e8400-e29b-41d4-a716-446655440000",
+                userData: userData,
+                
+                onReady: function() {
+                    console.log("SDK pronto - iniciando autenticação e coleta de dados");
+                },
+                
+                onSuccess: function(result) {
+                    console.log("Pagamento realizado com sucesso:", result);
+                },
+                
+                onError: function(error) {
+                    console.log("Erro no pagamento:", error);
+                }
+            };
+
+            // Executar pagamento
+            A55Pay.payV2(config);
+        }
+    </script>
+</body>
+</html>
