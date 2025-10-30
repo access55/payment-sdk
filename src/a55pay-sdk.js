@@ -530,7 +530,7 @@
     // Função para criar pagamento no backend A55
     async function createPayment(oneTimeToken) {
       try {
-        const response = await fetch(`https://core-manager.a55.tech/api/v1/bank/public/charge/${chargeUuid}/pay`, {
+        const response = await fetch(`http://localhost/api/v1/bank/public/charge/${chargeUuid}/pay`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
@@ -856,7 +856,17 @@
           neighborhood: userData.neighborhood || 'n/d',
           city: userData.city,
           state: userData.state,
-          country: userData.country || 'BR'
+          country: userData.country.toUpperCase() || 'BR'
+        },
+        shipping_address: {
+          postal_code: (userData.shipping_postal_code || userData.postal_code)?.replace(/\D/g, ''),
+          street: userData.shipping_street || userData.street,
+          address_number: userData.shipping_address_number || userData.address_number || 'n/d',
+          complement: userData.shipping_complement || userData.complement || '',
+          neighborhood: userData.shipping_neighborhood || userData.neighborhood || 'n/d',
+          city: userData.shipping_city || userData.city,
+          state: userData.shipping_state || userData.state,
+          country: userData.shipping_country.toUpperCase() || userData.country.toUpperCase() || 'BR'
         }
       };
 
@@ -1181,7 +1191,7 @@
         }
       };
 
-      // Timeout de segurança (30 segundos conforme boas práticas)
+      // Timeout de segurança (10 segundos conforme boas práticas)
       const timeout = setTimeout(() => {
         if (!processed) {
           processed = true;
