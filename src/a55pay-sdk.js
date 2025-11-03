@@ -6,6 +6,131 @@
 (function (global) {
   const SDK = {};
   
+  // ==========================================
+  // SENTRY CONFIGURATION
+  // ==========================================
+  let sentryInitialized = false;
+  let sentryConfig = {
+    enabled: true,
+    scriptUrl: 'https://js.sentry-cdn.com/f334943e6050a1dbfd5af9441b424ebb.min.js',
+    environment: 'production',
+    tracesSampleRate: 1.0,
+    replaysSessionSampleRate: 0.1,
+    replaysOnErrorSampleRate: 1.0,
+  };
+
+  function loadSentryScript() {
+    return new Promise((resolve, reject) => {
+      if (window.Sentry) {
+        resolve();
+        return;
+      }
+
+      const script = document.createElement('script');
+      script.src = sentryConfig.scriptUrl;
+      script.crossOrigin = 'anonymous';
+      script.onload = () => {
+        // Aguardar um pouco para o Sentry estar completamente carregado
+        setTimeout(resolve, 100);
+      };
+      script.onerror = () => reject(new Error('Failed to load Sentry script'));
+      document.head.appendChild(script);
+    });
+  }
+
+  // Inicializar Sentry automaticamente ao carregar o SDK
+  (function autoInitSentry() {
+    loadSentryScript().then(() => {
+      if (window.Sentry) {
+        try {
+          // Inicializar Sentry v8+ se ainda não foi inicializado
+          if (typeof window.Sentry.init === 'function') {
+            window.Sentry.init({
+              environment: sentryConfig.environment,
+              tracesSampleRate: sentryConfig.tracesSampleRate,
+              replaysSessionSampleRate: sentryConfig.replaysSessionSampleRate,
+              replaysOnErrorSampleRate: sentryConfig.replaysOnErrorSampleRate,
+              beforeSend(event) {
+                // Filtrar eventos se necessário
+                return event;
+              },
+              // Configurações específicas do Sentry v8+
+              integrations: [
+                ...(typeof window.Sentry.browserTracingIntegration === 'function' 
+                  ? [window.Sentry.browserTracingIntegration()] 
+                  : []),
+                ...(typeof window.Sentry.replayIntegration === 'function' 
+                  ? [window.Sentry.replayIntegration()] 
+                  : [])
+              ]
+            });
+          }
+          
+          sentryInitialized = true;
+          console.log('✅ Sentry inicializado automaticamente');
+          
+          // Adicionar breadcrumb inicial
+          logBreadcrumb('Sentry v8+ Auto-Initialized', { 
+            environment: sentryConfig.environment,
+            sdk_version: '1.0.16',
+            sentry_version: 'v8+'
+          });
+        } catch (error) {
+          console.warn('⚠️ Erro ao inicializar Sentry:', error.message);
+          sentryConfig.enabled = false;
+        }
+      }
+    }).catch((error) => {
+      console.warn('⚠️ Sentry não pôde ser carregado:', error.message);
+      sentryConfig.enabled = false;
+    });
+  })();
+
+  function logBreadcrumb(message, data = {}) {
+    if (sentryConfig.enabled && window.Sentry) {
+      window.Sentry.addBreadcrumb({
+        category: 'a55pay-sdk',
+        message: message,
+        level: 'info',
+        data: data,
+        timestamp: Date.now() / 1000
+      });
+    }
+    console.log(`[A55Pay SDK] ${message}`, data);
+  }
+
+  function captureError(error, context = {}) {
+    console.error('[A55Pay SDK Error]', error, context);
+    
+    if (sentryConfig.enabled && window.Sentry) {
+      window.Sentry.captureException(error, {
+        extra: context,
+        tags: {
+          component: 'a55pay-sdk',
+          ...context.tags
+        }
+      });
+    }
+  }
+
+  function setUserContext(userData) {
+    if (sentryConfig.enabled && window.Sentry) {
+      window.Sentry.setUser({
+        email: userData.payer_email,
+        username: userData.payer_name,
+      });
+    }
+  }
+
+  function setTransactionContext(chargeUuid, additionalData = {}) {
+    if (sentryConfig.enabled && window.Sentry) {
+      window.Sentry.setContext('transaction', {
+        charge_uuid: chargeUuid,
+        ...additionalData
+      });
+    }
+  }
+
   // Função para gerar UUID v4
   function generateUUID() {
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
@@ -73,9 +198,17 @@
       const chargeUuid = event.data.chargeUuid;
       console.log('3DS authentication complete for charge:', chargeUuid);
       
+      logBreadcrumb('3DS Auth Complete Message Received', { 
+        charge_uuid: chargeUuid,
+        event_origin: event.origin
+      });
+      
       if (currentPayV2Callbacks) {
         // Verificar status da charge após 3DS
+        logBreadcrumb('Checking Charge Status After 3DS', { charge_uuid: chargeUuid });
         checkChargeStatusAndHandle(chargeUuid, currentPayV2Callbacks);
+      } else {
+        logBreadcrumb('No Callbacks Found for 3DS Complete', { charge_uuid: chargeUuid });
       }
     }
   });
@@ -84,8 +217,16 @@
   async function checkChargeStatusAndHandle(chargeUuid, callbacks) {
     const { callOnSuccess, callOnError } = callbacks;
     
+    logBreadcrumb('Checking Charge Status', { charge_uuid: chargeUuid });
+    
     // Função para fechar modal após 3 segundos
     function closeModalAfterDelay(isSuccess = true, message = '') {
+      logBreadcrumb('Closing 3DS Modal', { 
+        charge_uuid: chargeUuid, 
+        is_success: isSuccess,
+        message 
+      });
+      
       // Mostrar feedback visual no modal
       const overlay = document.getElementById('threeds-overlay');
       if (overlay) {
@@ -113,6 +254,7 @@
         if (overlay && overlay.parentNode) {
           overlay.parentNode.removeChild(overlay);
           console.log('3DS modal closed automatically after 3 seconds');
+          logBreadcrumb('3DS Modal Closed', { charge_uuid: chargeUuid });
         }
         // Limpar callbacks globais
         currentPayV2Callbacks = null;
@@ -121,6 +263,8 @@
     
     try {
       // Buscar dados atualizados da charge
+      logBreadcrumb('Fetching Charge Status', { charge_uuid: chargeUuid });
+      
       const response = await fetch(`https://core-manager.a55.tech/api/v1/bank/public/charge?charge_uuid=${encodeURIComponent(chargeUuid)}`);
       
       if (!response.ok) {
@@ -139,11 +283,21 @@
       console.log('Charge status after 3DS:', status);
       console.log('Redirect URL:', redirectUrl);
       
+      logBreadcrumb('Charge Status Retrieved', { 
+        charge_uuid: chargeUuid, 
+        status,
+        has_redirect_url: !!redirectUrl
+      });
+      
       // Verificar status e chamar callback apropriado
       if (status === 'confirmed' || status === 'paid') {
         // Sucesso - verificar se deve redirecionar
         if (redirectUrl) {
           console.log('Redirecting to:', redirectUrl);
+          logBreadcrumb('Redirecting to Success Page', { 
+            charge_uuid: chargeUuid, 
+            redirect_url: redirectUrl 
+          });
           // Fechar modal antes de redirecionar
           closeModalAfterDelay(true, 'Redirecionando para a página de sucesso...');
           setTimeout(() => {
@@ -151,6 +305,7 @@
           }, 3000);
         } else {
           // Fechar modal e chamar callback de sucesso
+          logBreadcrumb('Payment Success Without Redirect', { charge_uuid: chargeUuid, status });
           closeModalAfterDelay(true, 'Pagamento aprovado com sucesso!');
           callOnSuccess({
             status: status,
@@ -162,11 +317,24 @@
       } else if (status === 'error' || status === 'failed' || status === 'declined') {
         // Fechar modal e chamar callback de erro
         const errorMessage = chargeData.message || 'Payment failed';
+        logBreadcrumb('Payment Failed After 3DS', { 
+          charge_uuid: chargeUuid, 
+          status,
+          error_message: errorMessage
+        });
         closeModalAfterDelay(false, errorMessage);
-        callOnError(new Error(`Payment ${status}: ${errorMessage}`));
+        const error = new Error(`Payment ${status}: ${errorMessage}`);
+        captureError(error, {
+          function: 'checkChargeStatusAndHandle',
+          charge_uuid: chargeUuid,
+          status: status,
+          tags: { payment_status: status }
+        });
+        callOnError(error);
       } else {
         // Status ainda pendente ou outro - não fechar modal ainda
         console.log('Payment still processing, status:', status);
+        logBreadcrumb('Payment Still Processing', { charge_uuid: chargeUuid, status });
         callOnSuccess({
           status: status,
           charge_uuid: chargeUuid,
@@ -178,6 +346,15 @@
       
     } catch (error) {
       console.error('Error checking charge status:', error);
+      logBreadcrumb('Error Checking Charge Status', { 
+        charge_uuid: chargeUuid, 
+        error: error.message 
+      });
+      captureError(error, {
+        function: 'checkChargeStatusAndHandle',
+        charge_uuid: chargeUuid,
+        tags: { operation: 'status_check' }
+      });
       // Fechar modal em caso de erro
       closeModalAfterDelay(false, 'Erro ao verificar status do pagamento');
       callOnError(error);
@@ -669,9 +846,82 @@
   SDK.payV2 = function (config) {
     const { charge_uuid, userData, onSuccess, onError, onReady } = config;
     
-    function callOnError(err) { if (typeof onError === 'function') onError(err); }
-    function callOnSuccess(res) { if (typeof onSuccess === 'function') onSuccess(res); }
-    function callOnReady() { if (typeof onReady === 'function') onReady(); }
+    // Monitoramento com Sentry v8+ usando withScope
+    if (sentryConfig.enabled && window.Sentry) {
+      try {
+        window.Sentry.withScope((scope) => {
+          scope.setTag('operation', 'SDK.payV2');
+          scope.setContext('payment', {
+            charge_uuid: charge_uuid,
+            timestamp: new Date().toISOString()
+          });
+        });
+      } catch (error) {
+        console.warn('Erro ao configurar escopo do Sentry:', error);
+      }
+    }
+    
+    logBreadcrumb('PayV2 Initiated', { charge_uuid });
+    
+    function callOnError(err) {
+      captureError(err, {
+        function: 'SDK.payV2',
+        charge_uuid: charge_uuid,
+        tags: { payment_status: 'error' }
+      });
+      
+      // Capturar erro no Sentry v8+
+      if (sentryConfig.enabled && window.Sentry) {
+        try {
+          window.Sentry.withScope((scope) => {
+            scope.setTag('payment_status', 'error');
+            scope.setLevel('error');
+            window.Sentry.captureException(err);
+          });
+        } catch (error) {
+          console.warn('Erro ao capturar exceção no Sentry:', error);
+        }
+      }
+      
+      if (typeof onError === 'function') onError(err);
+    }
+    
+    function callOnSuccess(res) {
+      logBreadcrumb('PayV2 Success', { 
+        charge_uuid, 
+        status: res.status,
+        threeds_completed: res.threeds_completed 
+      });
+      
+      // Registrar sucesso no Sentry v8+
+      if (sentryConfig.enabled && window.Sentry) {
+        try {
+          window.Sentry.withScope((scope) => {
+            scope.setTag('payment_status', 'success');
+            scope.setLevel('info');
+            scope.setContext('payment_result', {
+              status: res.status,
+              threeds_completed: res.threeds_completed,
+              charge_uuid: charge_uuid
+            });
+            window.Sentry.addBreadcrumb({
+              category: 'payment',
+              message: 'Payment completed successfully',
+              level: 'info'
+            });
+          });
+        } catch (error) {
+          console.warn('Erro ao registrar sucesso no Sentry:', error);
+        }
+      }
+      
+      if (typeof onSuccess === 'function') onSuccess(res);
+    }
+    
+    function callOnReady() {
+      logBreadcrumb('PayV2 Ready', { charge_uuid });
+      if (typeof onReady === 'function') onReady();
+    }
 
     // Armazenar callbacks globalmente para o listener 3DS
     currentPayV2Callbacks = {
@@ -682,28 +932,43 @@
 
     // Validações obrigatórias
     if (!charge_uuid || !userData) {
-      callOnError(new Error('Missing charge_uuid or userData in config'));
+      const error = new Error('Missing charge_uuid or userData in config');
+      logBreadcrumb('PayV2 Validation Error', { error: error.message });
+      callOnError(error);
       return;
     }
 
     // Validar payer_name e payer_email obrigatórios
     if (!userData.payer_name || !userData.payer_email) {
-      callOnError(new Error('payer_name and payer_email are required in userData'));
+      const error = new Error('payer_name and payer_email are required in userData');
+      logBreadcrumb('PayV2 Validation Error', { error: error.message });
+      callOnError(error);
       return;
     }
 
     // Validar ccv ou card_cryptogram
     if (!userData.ccv && !userData.card_cryptogram) {
-      callOnError(new Error('Either ccv or card_cryptogram is required in userData'));
+      const error = new Error('Either ccv or card_cryptogram is required in userData');
+      logBreadcrumb('PayV2 Validation Error', { error: error.message });
+      callOnError(error);
       return;
     }
+    
+    // Definir contexto do usuário no Sentry
+    setUserContext(userData);
+    setTransactionContext(charge_uuid, {
+      has_cryptogram: !!userData.card_cryptogram,
+      payment_method: 'credit_card'
+    });
 
     // Função para coletar informações do dispositivo
     function collectDeviceInfo() {
+      logBreadcrumb('Collecting Device Info', { charge_uuid });
+      
       const screen = window.screen;
       const navigator = window.navigator;
       
-      return {
+      const deviceInfo = {
         device_id: globalDeviceId, // use global device_id
         ip_address: '', // Será preenchido após obter IP
         session_id: '', // Será preenchido após autenticação
@@ -718,10 +983,20 @@
         http_browser_time_difference: new Date().getTimezoneOffset().toString(),
         http_accept_browser_value: navigator.userAgent
       };
+      
+      logBreadcrumb('Device Info Collected', { 
+        device_id: deviceInfo.device_id,
+        screen_resolution: `${deviceInfo.http_browser_screen_width}x${deviceInfo.http_browser_screen_height}`,
+        language: deviceInfo.http_browser_language
+      });
+      
+      return deviceInfo;
     }
 
     // Função para obter IP address do usuário
     async function getClientIPAddress() {
+      logBreadcrumb('Getting Client IP Address', { charge_uuid });
+      
       try {
         // Método 1: Usar serviço público de IP (mais confiável)
         const response = await fetch('https://api.ipify.org?format=json', {
@@ -733,10 +1008,12 @@
         
         if (response.ok) {
           const data = await response.json();
+          logBreadcrumb('IP Address Obtained', { method: 'ipify', ip: data.ip });
           return data.ip;
         }
       } catch (error) {
         console.warn('Failed to get IP from ipify, trying alternative method:', error);
+        logBreadcrumb('IP Fetch Failed', { method: 'ipify', error: error.message });
       }
 
       try {
@@ -750,20 +1027,32 @@
         
         if (response.ok) {
           const data = await response.json();
-          return data.origin.split(',')[0].trim(); // Pega o primeiro IP se houver múltiplos
+          const ip = data.origin.split(',')[0].trim();
+          logBreadcrumb('IP Address Obtained', { method: 'httpbin', ip });
+          return ip; // Pega o primeiro IP se houver múltiplos
         }
       } catch (error) {
         console.warn('Failed to get IP from httpbin, trying WebRTC method:', error);
+        logBreadcrumb('IP Fetch Failed', { method: 'httpbin', error: error.message });
       }
 
       try {
         // Método 3: WebRTC (funciona mesmo com proxy/VPN em alguns casos)
-        return await getIPViaWebRTC();
+        const ip = await getIPViaWebRTC();
+        logBreadcrumb('IP Address Obtained', { method: 'webrtc', ip });
+        return ip;
       } catch (error) {
         console.warn('Failed to get IP via WebRTC:', error);
+        logBreadcrumb('IP Fetch Failed', { method: 'webrtc', error: error.message });
+        captureError(error, {
+          function: 'getClientIPAddress',
+          charge_uuid: charge_uuid,
+          tags: { operation: 'ip_detection' }
+        });
       }
 
       // Se todos os métodos falharam, retornar string vazia
+      logBreadcrumb('All IP Detection Methods Failed', { charge_uuid });
       return '';
     }
 
@@ -819,6 +1108,8 @@
 
     // Função para processar pagamento
     async function processPayment(sessionId) {
+      logBreadcrumb('Processing Payment', { charge_uuid, session_id: sessionId });
+      
       const deviceInfo = collectDeviceInfo();
       deviceInfo.session_id = sessionId;
       
@@ -826,8 +1117,14 @@
       try {
         deviceInfo.ip_address = await getClientIPAddress();
         console.log('Client IP detected:', deviceInfo.ip_address);
+        logBreadcrumb('Client IP Detected', { ip: deviceInfo.ip_address });
       } catch (error) {
         console.warn('Could not detect client IP:', error);
+        captureError(error, {
+          function: 'processPayment.getClientIPAddress',
+          charge_uuid: charge_uuid,
+          tags: { operation: 'ip_detection' }
+        });
         deviceInfo.ip_address = ''; // Deixa vazio se não conseguir obter
       }
 
@@ -870,6 +1167,12 @@
         }
       };
 
+      logBreadcrumb('Sending Payment Request', { 
+        charge_uuid,
+        has_device_info: !!deviceInfo.device_id,
+        has_ip: !!deviceInfo.ip_address
+      });
+
       fetch(`https://core-manager.a55.tech/api/v1/bank/public/charge/${charge_uuid}/pay`, {
         method: 'POST',
         headers: {
@@ -880,31 +1183,53 @@
       .then(async (resp) => {
         if (!resp.ok) {
           const err = await resp.json().catch(() => ({}));
+          logBreadcrumb('Payment Request Failed', { 
+            charge_uuid, 
+            status: resp.status,
+            error: err.message 
+          });
           throw new Error(err.message || 'Payment failed');
         }
         return resp.json();
       })
       .then((result) => {
+        logBreadcrumb('Payment Response Received', { 
+          charge_uuid, 
+          status: result.status,
+          has_3ds_url: !!result.url_3ds
+        });
+        
         if (result.status === 'pending' && result.url_3ds) {
           // Abrir iframe para 3DS
+          logBreadcrumb('3DS Authentication Required', { charge_uuid, url_3ds: result.url_3ds });
           open3DSIframe(result.url_3ds, result);
         }else if (result.status === 'confirmed' || result.status === 'paid') {
+          logBreadcrumb('Payment Confirmed', { charge_uuid, status: result.status });
           callOnSuccess(result);
         }
         else {
+          logBreadcrumb('Payment Status Unknown', { charge_uuid, status: result.status });
           callOnError(result);
         }
       })
       .catch((err) => {
+        captureError(err, {
+          function: 'processPayment',
+          charge_uuid: charge_uuid,
+          tags: { payment_status: 'request_failed' }
+        });
         callOnError(err);
       });
     }
 
     // Função para abrir iframe 3DS
     function open3DSIframe(url3ds, paymentResult) {
+      logBreadcrumb('Opening 3DS Iframe', { charge_uuid, url_3ds: url3ds });
+      
       // Remover iframe anterior se existir
       const existingIframe = document.getElementById('threeds-iframe');
       if (existingIframe) {
+        logBreadcrumb('Removing Existing 3DS Iframe', { charge_uuid });
         existingIframe.remove();
       }
 
@@ -951,10 +1276,17 @@
         z-index: 1000000;
       `;
       closeBtn.onclick = function() {
+        logBreadcrumb('3DS Cancelled by User', { charge_uuid });
         document.body.removeChild(overlay);
         // Limpar callbacks globais
         currentPayV2Callbacks = null;
-        callOnError(new Error('3DS authentication cancelled by user'));
+        const error = new Error('3DS authentication cancelled by user');
+        captureError(error, {
+          function: 'open3DSIframe.closeBtn',
+          charge_uuid: charge_uuid,
+          tags: { payment_status: '3ds_cancelled' }
+        });
+        callOnError(error);
       };
 
       // Criar iframe
@@ -968,6 +1300,21 @@
         margin-top: 20px;
       `;
 
+      // Eventos do iframe
+      iframe.onload = function() {
+        logBreadcrumb('3DS Iframe Loaded', { charge_uuid });
+      };
+      
+      iframe.onerror = function() {
+        logBreadcrumb('3DS Iframe Load Error', { charge_uuid });
+        captureError(new Error('Failed to load 3DS iframe'), {
+          function: 'open3DSIframe.iframe.onerror',
+          charge_uuid: charge_uuid,
+          url_3ds: url3ds,
+          tags: { payment_status: '3ds_load_error' }
+        });
+      };
+
       container.appendChild(closeBtn);
       container.appendChild(iframe);
       overlay.appendChild(container);
@@ -975,20 +1322,33 @@
 
       // O listener global já trata as mensagens 3DS
       console.log('3DS iframe opened for URL:', url3ds);
+      logBreadcrumb('3DS Iframe Displayed', { charge_uuid });
 
       // Timeout para 3DS (5 minutos)
       setTimeout(() => {
         if (document.getElementById('threeds-overlay')) {
+          logBreadcrumb('3DS Timeout', { charge_uuid, timeout_ms: 300000 });
           document.body.removeChild(overlay);
           // Limpar callbacks globais
           currentPayV2Callbacks = null;
-          callOnError(new Error('3DS authentication timeout'));
+          const error = new Error('3DS authentication timeout');
+          captureError(error, {
+            function: 'open3DSIframe.timeout',
+            charge_uuid: charge_uuid,
+            tags: { payment_status: '3ds_timeout' }
+          });
+          callOnError(error);
         }
       }, 300000);
     }
 
     // Iniciar processo: primeiro executar authentication
     callOnReady();
+    
+    logBreadcrumb('Starting Authentication Process', { 
+      charge_uuid,
+      card_brand: getCardBrand(userData.number)
+    });
     
     SDK.authentication({
       transactionReference: charge_uuid,
@@ -998,11 +1358,25 @@
       cardNumber: userData.number?.replace(/\s/g, ''),
       onSuccess: async function(authResult) {
         // Authentication completado, processar pagamento
+        logBreadcrumb('Authentication Success', { 
+          charge_uuid,
+          session_id: authResult.sessionId
+        });
         await processPayment(authResult.sessionId);
       },
       onError: async function(authError) {
         // Se authentication falhar, prosseguir sem device data collection
         console.warn('Authentication failed, proceeding without device data collection:', authError.message);
+        logBreadcrumb('Authentication Failed', { 
+          charge_uuid,
+          error: authError.message,
+          proceeding_without_device_data: true
+        });
+        captureError(authError, {
+          function: 'SDK.authentication.onError',
+          charge_uuid: charge_uuid,
+          tags: { operation: 'authentication' }
+        });
         await processPayment('');
       }
     });

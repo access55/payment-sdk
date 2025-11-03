@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>A55Pay SDK - Exemplo com Sentry</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 40px;
+            max-width: 500px;
+            width: 100%;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+        
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-weight: 600;
+            font-size: 14px;
+        }
+        
+        input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+        
+        input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        button {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            margin-top: 10px;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+        
+        button:active {
+            transform: translateY(0);
+        }
+        
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .alert {
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+        
+        .alert-success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .alert-error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .alert-info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        
+        .row {
+            display: flex;
+            gap: 15px;
+        }
+        
+        .row .form-group {
+            flex: 1;
+        }
+        
+        .sentry-status {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-left: 10px;
+        }
+        
+        .sentry-active {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        
+        .sentry-inactive {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>
+            A55Pay SDK
+            <span id="sentryStatus" class="sentry-status sentry-inactive">Sentry: Inativo</span>
+        </h1>
+        <p class="subtitle">Exemplo de integração com Sentry para monitoramento completo</p>
+        
+        <div id="message"></div>
+        
+        <form id="payment-form">
+            <div class="form-group">
+                <label for="charge_uuid">Charge UUID</label>
+                <input type="text" id="charge_uuid" name="charge_uuid" 
+                       placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="payer_name">Nome do Pagador</label>
+                <input type="text" id="payer_name" name="payer_name" 
+                       placeholder="João da Silva" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="payer_email">Email do Pagador</label>
+                <input type="email" id="payer_email" name="payer_email" 
+                       placeholder="joao@example.com" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="card_number">Número do Cartão</label>
+                <input type="text" id="card_number" name="card_number" 
+                       placeholder="1234 5678 9012 3456" maxlength="19" required>
+            </div>
+            
+            <div class="row">
+                <div class="form-group">
+                    <label for="expiry_month">Mês</label>
+                    <input type="text" id="expiry_month" name="expiry_month" 
+                           placeholder="12" maxlength="2" required>
+                </div>
+                <div class="form-group">
+                    <label for="expiry_year">Ano</label>
+                    <input type="text" id="expiry_year" name="expiry_year" 
+                           placeholder="2025" maxlength="4" required>
+                </div>
+                <div class="form-group">
+                    <label for="ccv">CCV</label>
+                    <input type="text" id="ccv" name="ccv" 
+                           placeholder="123" maxlength="4" required>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label for="holder_name">Nome no Cartão</label>
+                <input type="text" id="holder_name" name="holder_name" 
+                       placeholder="JOAO DA SILVA" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="postal_code">CEP</label>
+                <input type="text" id="postal_code" name="postal_code" 
+                       placeholder="12345-678" maxlength="9" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="street">Endereço</label>
+                <input type="text" id="street" name="street" 
+                       placeholder="Rua Exemplo, 123" required>
+            </div>
+            
+            <div class="row">
+                <div class="form-group">
+                    <label for="city">Cidade</label>
+                    <input type="text" id="city" name="city" 
+                           placeholder="São Paulo" required>
+                </div>
+                <div class="form-group">
+                    <label for="state">Estado</label>
+                    <input type="text" id="state" name="state" 
+                           placeholder="SP" maxlength="2" required>
+                </div>
+            </div>
+            
+            <button type="submit" id="pay-button">Pagar com A55Pay</button>
+        </form>
+    </div>
+
+    <!-- Carregar SDK do A55Pay -->
+    <script src="../dist/a55pay-sdk.js"></script>
+    
+    <script>
+        // Sentry é inicializado automaticamente quando o SDK carrega!
+        // Aguardar um pouco para garantir que o Sentry esteja pronto
+        setTimeout(() => {
+            if (window.Sentry) {
+                // Atualizar status do Sentry na UI
+                document.getElementById('sentryStatus').textContent = 'Sentry: Ativo';
+                document.getElementById('sentryStatus').classList.remove('sentry-inactive');
+                document.getElementById('sentryStatus').classList.add('sentry-active');
+                
+                console.log('✅ Sentry está ativo e monitorando!');
+            } else {
+                console.warn('⚠️ Sentry não está disponível');
+            }
+        }, 200);
+        
+        // Máscara para cartão de crédito
+        document.getElementById('card_number').addEventListener('input', function(e) {
+            let value = e.target.value.replace(/\s/g, '');
+            let formattedValue = value.match(/.{1,4}/g)?.join(' ') || value;
+            e.target.value = formattedValue;
+        });
+        
+        // Máscara para CEP
+        document.getElementById('postal_code').addEventListener('input', function(e) {
+            let value = e.target.value.replace(/\D/g, '');
+            if (value.length > 5) {
+                value = value.slice(0, 5) + '-' + value.slice(5, 8);
+            }
+            e.target.value = value;
+        });
+        
+        // Função para exibir mensagens
+        function showMessage(message, type = 'info') {
+            const messageDiv = document.getElementById('message');
+            messageDiv.innerHTML = `<div class="alert alert-${type}">${message}</div>`;
+            
+            // Remover mensagem após 5 segundos
+            setTimeout(() => {
+                messageDiv.innerHTML = '';
+            }, 5000);
+        }
+        
+        // Handler do formulário
+        document.getElementById('payment-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const payButton = document.getElementById('pay-button');
+            payButton.disabled = true;
+            payButton.textContent = 'Processando...';
+            
+            const formData = new FormData(e.target);
+            const userData = {
+                payer_name: formData.get('payer_name'),
+                payer_email: formData.get('payer_email'),
+                holder_name: formData.get('holder_name'),
+                number: formData.get('card_number'),
+                expiry_month: formData.get('expiry_month'),
+                expiry_year: formData.get('expiry_year'),
+                ccv: formData.get('ccv'),
+                postal_code: formData.get('postal_code'),
+                street: formData.get('street'),
+                city: formData.get('city'),
+                state: formData.get('state'),
+                country: 'BR',
+                address_number: '123'
+            };
+            
+            console.log('Iniciando pagamento com A55Pay SDK...');
+            
+            // Chamar SDK payV2 com Sentry habilitado
+            A55Pay.payV2({
+                charge_uuid: formData.get('charge_uuid'),
+                userData: userData,
+                onReady: function() {
+                    console.log('SDK pronto para processar pagamento');
+                    showMessage('Processando pagamento...', 'info');
+                },
+                onSuccess: function(result) {
+                    console.log('Pagamento bem-sucedido:', result);
+                    showMessage('Pagamento realizado com sucesso! Status: ' + result.status, 'success');
+                    payButton.disabled = false;
+                    payButton.textContent = 'Pagar com A55Pay';
+                    
+                    // Se tiver Sentry, adicionar evento customizado
+                    if (window.Sentry) {
+                        window.Sentry.captureMessage('Pagamento realizado com sucesso', {
+                            level: 'info',
+                            extra: {
+                                charge_uuid: formData.get('charge_uuid'),
+                                status: result.status
+                            }
+                        });
+                    }
+                },
+                onError: function(error) {
+                    console.error('Erro no pagamento:', error);
+                    showMessage('Erro: ' + error.message, 'error');
+                    payButton.disabled = false;
+                    payButton.textContent = 'Pagar com A55Pay';
+                    
+                    // O Sentry já capturou o erro automaticamente via SDK
+                }
+            });
+        });
+        
+        console.log('%cA55Pay SDK Exemplo com Sentry', 'color: #667eea; font-size: 20px; font-weight: bold;');
+        console.log('%cTodos os eventos e erros estão sendo monitorados pelo Sentry', 'color: #666; font-size: 12px;');
+        console.log('%cVocê pode ver os logs no dashboard do Sentry em tempo real!', 'color: #666; font-size: 12px;');
+    </script>
+</body>
+</html>
+
