@@ -51,7 +51,30 @@
               replaysSessionSampleRate: sentryConfig.replaysSessionSampleRate,
               replaysOnErrorSampleRate: sentryConfig.replaysOnErrorSampleRate,
               beforeSend(event) {
-                // Filtrar eventos se necessário
+                // Filtrar erros que não são do nosso domínio
+                if (event.request && event.request.url) {
+                  if (event.request.url.includes('checkout.pagsmile.com')) {
+                    console.log('Sentry: Filtrando erro de checkout.pagsmile.com');
+                    return null;
+                  }
+                }
+                
+                // Filtrar erros de origens externas nos stack traces
+                if (event.exception && event.exception.values) {
+                  for (const exception of event.exception.values) {
+                    if (exception.stacktrace && exception.stacktrace.frames) {
+                      const hasExternalFrame = exception.stacktrace.frames.some(frame => 
+                        frame.filename && frame.filename.includes('checkout.pagsmile.com')
+                      );
+                      
+                      if (hasExternalFrame) {
+                        console.log('Sentry: Filtrando erro originado de checkout.pagsmile.com');
+                        return null;
+                      }
+                    }
+                  }
+                }
+                
                 return event;
               },
               // Configurações específicas do Sentry v8+
@@ -1580,7 +1603,7 @@
             deviceDataCollection: 'timeout_but_likely_successful'
           });
         }
-      }, 10000);
+      }, 13000);
 
       // Submeter o formulário para iniciar a coleta
       try {
