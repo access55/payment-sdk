@@ -1194,7 +1194,9 @@
       function handleDeviceDataComplete(data) {
         if (processed) return;
         processed = true;
-        
+
+        console.log('Device Data Collection completed:', data);
+        console.log('referenceId:', referenceId);
         cleanup();
         callOnSuccess({
           sessionId: referenceId,
@@ -1218,7 +1220,7 @@
       // Handler para mensagens do iframe conforme documentação
       function messageHandler(event) {
         // Verificar se a mensagem vem do domínio da CyberSource
-        if (event.origin === 'https://centinelapistag.cardinalcommerce.com') {
+        if (event.origin === 'https://centinelapi.cardinalcommerce.com') {
           let data = JSON.parse(event.data);
           console.log('Merchant received a message:', data);
           
