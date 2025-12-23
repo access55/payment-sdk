@@ -70,6 +70,11 @@
   // Variáveis globais para callbacks do payV2
   let currentPayV2Callbacks = null;
 
+  // Estado do checkout v2 via SDK.open
+  const CHECKOUT_ORIGIN = 'http://localhost:3001';
+  const CHECKOUT_BASE_URL = `${CHECKOUT_ORIGIN}/checkout/v2`;
+  let currentCheckoutInstance = null;
+
   // Listener global para mensagens 3DS
   window.addEventListener('message', function (event) {
     if (event.data && event.data.event === '3ds-auth-complete') {
@@ -1295,6 +1300,207 @@
     globalDeviceId = generateDeviceId(); // Gera novo
     return globalDeviceId;
   };
+
+  /**
+   * Renderiza checkout v2 via iframe em modal ou embed.
+   * @param {Object} config
+   * @param {string} config.checkoutUuid - UUID do checkout.
+   * @param {'modal'|'embed'} [config.display='modal'] - Modo de exibição.
+   * @param {string} [config.containerId] - Necessário apenas para embed (criado automaticamente se não existir).
+   * @param {function} [config.onEvent] - Callback para eventos genéricos.
+   * @param {function} [config.onSuccess] - Callback para sucesso.
+   * @param {function} [config.onClose] - Callback ao fechar (sempre chamado quando o iframe é removido).
+   * @param {function} [config.onError] - Callback para erros.
+   */
+  SDK.open = function(config) {
+    const {
+      checkoutUuid,
+      display = 'modal',
+      containerId,
+      onEvent,
+      onSuccess,
+      onClose,
+      onError
+    } = config || {};
+
+    function callOnEvent(payload) { if (typeof onEvent === 'function') onEvent(payload); }
+    function callOnSuccess(payload) { if (typeof onSuccess === 'function') onSuccess(payload); }
+    function callOnClose(payload) { if (typeof onClose === 'function') onClose(payload); }
+    function callOnError(err) { if (typeof onError === 'function') onError(err); }
+
+    if (!checkoutUuid) {
+      callOnError(new Error('checkoutUuid é obrigatório'));
+      return;
+    }
+
+    const normalizedDisplay = display === 'embed' ? 'embed' : 'modal';
+    const checkoutUrl = `${CHECKOUT_BASE_URL}/${encodeURIComponent(checkoutUuid)}?origin=sdk`;
+
+    // Limpa instância anterior antes de abrir nova
+    cleanupCheckout();
+
+    // Cria listener para mensagens do iframe
+    const messageListener = function(event) {
+      if (event.origin !== CHECKOUT_ORIGIN) return;
+      const payload = event.data || {};
+      const status = (payload.status || '').toLowerCase();
+
+      if (status === 'paid' || status === 'confirmed' || status === 'ok') {
+        callOnSuccess(payload);
+        cleanupCheckout(true);
+        return;
+      }
+
+      if (status === 'error') {
+        const err = payload instanceof Error ? payload : new Error(payload?.message || 'Checkout error');
+        err.payload = payload;
+        callOnError(err);
+        cleanupCheckout(true);
+        return;
+      }
+
+      // Evento genérico
+      callOnEvent(payload);
+
+      // Caso receba sinal explícito de fechamento
+      if (payload.event === 'checkout-close') {
+        cleanupCheckout(true);
+      }
+    };
+
+    window.addEventListener('message', messageListener);
+
+    // Helpers de DOM
+    function buildIframe() {
+      const iframe = document.createElement('iframe');
+      iframe.src = checkoutUrl;
+      iframe.id = 'a55pay-checkout-iframe';
+      iframe.style.cssText = 'width:100%;height:100%;border:0;';
+      iframe.setAttribute('allow', 'payment *; fullscreen; clipboard-read; clipboard-write');
+      iframe.setAttribute('sandbox', 'allow-scripts allow-forms allow-same-origin allow-popups allow-popups-to-escape-sandbox');
+      iframe.loading = 'eager';
+      return iframe;
+    }
+
+    function buildModal(iframe) {
+      const overlay = document.createElement('div');
+      overlay.id = 'a55pay-checkout-overlay';
+      overlay.style.cssText = [
+        'position:fixed','top:0','left:0','width:100%','height:100%',
+        'background:rgba(9,12,28,0.75)','backdrop-filter:blur(4px)',
+        'z-index:999999','display:flex','align-items:center','justify-content:center',
+        'padding:18px','box-sizing:border-box'
+      ].join(';');
+
+      const container = document.createElement('div');
+      container.id = 'a55pay-checkout-modal';
+      container.style.cssText = [
+        'background:linear-gradient(180deg,#ffffff 0%,#f9fafb 100%)',
+        'border:1px solid rgba(17,24,39,0.08)',
+        'border-radius:24px','max-width:920px','width:100%',
+        'max-height:90vh','height:90vh',
+        'box-shadow:0 24px 80px rgba(0,0,0,0.35)',
+        'overflow:visible','position:relative'
+      ].join(';');
+
+      const closeBtn = document.createElement('button');
+      closeBtn.type = 'button';
+      closeBtn.textContent = '×';
+      closeBtn.setAttribute('aria-label', 'Fechar checkout');
+      closeBtn.style.cssText = [
+        'position:absolute','top:-18px','right:-18px',
+        'width:40px','height:40px','border-radius:50%',
+        'background:#fff','border:1px solid rgba(0,0,0,0.12)',
+        'font-size:22px','font-weight:600','color:#111',
+        'cursor:pointer','line-height:1','padding:0',
+        'display:flex','align-items:center','justify-content:center',
+        'box-shadow:0 4px 12px rgba(0,0,0,0.22)','transition:background 0.2s ease,color 0.2s ease',
+        'z-index:3'
+      ].join(';');
+      closeBtn.onmouseenter = function() {
+        closeBtn.style.background = '#f3f3f3';
+      };
+      closeBtn.onmouseleave = function() {
+        closeBtn.style.background = '#fff';
+      };
+      closeBtn.onclick = function() {
+        cleanupCheckout(true);
+      };
+
+      container.appendChild(closeBtn);
+      container.appendChild(iframe);
+      overlay.appendChild(container);
+      document.body.appendChild(overlay);
+      return { overlay, container };
+    }
+
+    function ensureEmbedContainer() {
+      let target = containerId ? document.getElementById(containerId) : null;
+      if (!target) {
+        target = document.createElement('div');
+        target.id = containerId || 'a55pay-checkout-embed';
+        target.style.cssText = 'width:100%;max-width:100%;min-height:600px;';
+        document.body.appendChild(target);
+      }
+      target.style.position = target.style.position || 'relative';
+      target.style.minHeight = target.style.minHeight || '600px';
+      return target;
+    }
+
+    // Montagem conforme display
+    const iframe = buildIframe();
+    let overlay = null;
+    let container = null;
+
+    if (normalizedDisplay === 'modal') {
+      const modal = buildModal(iframe);
+      overlay = modal.overlay;
+      container = modal.container;
+    } else {
+      container = ensureEmbedContainer();
+      container.appendChild(iframe);
+    }
+
+    // Guarda instância atual para permitir cleanup futuro
+    currentCheckoutInstance = {
+      display: normalizedDisplay,
+      overlay,
+      container,
+      iframe,
+      listener: messageListener,
+      callbacks: { callOnClose }
+    };
+
+    // Retorno opcional
+    return {
+      close: () => cleanupCheckout(true)
+    };
+  };
+
+  // Remove iframe/modal e listener ativo.
+  function cleanupCheckout(triggerCloseCallback = false) {
+    if (!currentCheckoutInstance) return;
+    const { overlay, container, iframe, listener, callbacks } = currentCheckoutInstance;
+
+    if (listener) {
+      window.removeEventListener('message', listener);
+    }
+
+    if (iframe && iframe.parentNode) iframe.parentNode.removeChild(iframe);
+    if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
+
+    // Se embed, remover container apenas se foi criado dinamicamente (pela ausência de containerId)
+    // Não removemos container se veio do usuário para evitar efeitos colaterais.
+    if (container && container.id === 'a55pay-checkout-embed' && container.parentNode) {
+      container.parentNode.removeChild(container);
+    }
+
+    if (triggerCloseCallback && callbacks?.callOnClose) {
+      callbacks.callOnClose();
+    }
+
+    currentCheckoutInstance = null;
+  }
 
   // Expose globally
   global.A55Pay = SDK;

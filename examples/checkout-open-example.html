@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>A55Pay SDK - Exemplo A55Pay.open</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 24px; max-width: 960px; margin: 0 auto; }
+    label { display: block; margin-top: 12px; font-weight: 600; }
+    input, select { padding: 8px; width: 100%; max-width: 420px; }
+    button { margin-top: 12px; padding: 10px 16px; cursor: pointer; }
+    .row { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 16px; }
+    .log { margin-top: 24px; background: #f6f6f6; padding: 12px; height: 200px; overflow: auto; font-size: 12px; }
+    #checkout-embed-target { border: 1px solid #ccc; min-height: 640px; margin-top: 16px; }
+  </style>
+</head>
+<body>
+  <h1>A55Pay.open - Exemplo</h1>
+  <p>Use este exemplo para abrir o checkout em modal ou embed via <code>A55Pay.open</code>.</p>
+
+  <label for="checkoutUuid">checkoutUuid</label>
+  <input id="checkoutUuid" type="text" value="b7b7f8c2-9d4e-4a3e-bc9a-2c0b1f9b7e21" />
+
+  <label for="displayMode">display</label>
+  <select id="displayMode">
+    <option value="modal">modal (padrão)</option>
+    <option value="embed">embed</option>
+  </select>
+
+  <label for="containerId">containerId (apenas embed)</label>
+  <input id="containerId" type="text" placeholder="checkout-embed-target" />
+
+  <div class="row">
+    <button id="openBtn">Abrir checkout</button>
+    <button id="closeBtn" type="button">Fechar checkout</button>
+  </div>
+
+  <div id="checkout-embed-target"></div>
+
+  <div class="log" id="log"></div>
+
+  <!-- A55Pay SDK (via CDN) -->
+  <script src="../src/a55pay-sdk.js"></script>
+
+  <script>
+    let activeInstance = null;
+    const logEl = document.getElementById('log');
+
+    function log(message, data) {
+      const time = new Date().toISOString();
+      const line = document.createElement('div');
+      line.textContent = `[${time}] ${message} ${data ? JSON.stringify(data) : ''}`;
+      logEl.appendChild(line);
+      logEl.scrollTop = logEl.scrollHeight;
+      console.log(message, data);
+    }
+
+    function openCheckout() {
+      const checkoutUuid = document.getElementById('checkoutUuid').value.trim();
+      const display = document.getElementById('displayMode').value;
+      const containerIdInput = document.getElementById('containerId').value.trim();
+      const containerId = containerIdInput || 'checkout-embed-target';
+
+      if (!checkoutUuid) {
+        log('checkoutUuid é obrigatório');
+        return;
+      }
+
+      // Fecha instância anterior
+      if (activeInstance && typeof activeInstance.close === 'function') {
+        activeInstance.close();
+      }
+
+      activeInstance = A55Pay.open({
+        checkoutUuid,
+        display,
+        containerId,
+        onEvent: (event) => log('onEvent', event),
+        onSuccess: (data) => log('onSuccess', data),
+        onError: (err) => log('onError', err && err.message ? err.message : err),
+        onClose: () => log('onClose')
+      });
+    }
+
+    function closeCheckout() {
+      if (activeInstance && typeof activeInstance.close === 'function') {
+        activeInstance.close();
+        activeInstance = null;
+        log('Checkout fechado manualmente');
+      } else {
+        log('Nenhuma instância ativa para fechar');
+      }
+    }
+
+    document.getElementById('openBtn').addEventListener('click', openCheckout);
+    document.getElementById('closeBtn').addEventListener('click', closeCheckout);
+  </script>
+</body>
+</html>
+
