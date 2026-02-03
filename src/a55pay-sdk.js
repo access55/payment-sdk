@@ -5,7 +5,7 @@
 
 (function (global) {
   const SDK = {};
-  
+
 
 
 
@@ -31,18 +31,18 @@
     script.type = 'text/javascript';
     script.async = true;
     script.src = `https://h.online-metrix.net/fp/tags.js?org_id=k8vif92e&session_id=a55payment_br${encodeURIComponent(sessionId)}`;
-    
+
     // Adicionar ao head
     document.head.appendChild(script);
-    
+
     // Log para debug
     console.log('ThreatMetrix script loaded with session_id:', `a55payment_br${sessionId}`);
-    
+
     // Opcional: listener para quando script carregar
     script.onload = function() {
       console.log('ThreatMetrix fingerprinting script loaded successfully');
     };
-    
+
     script.onerror = function() {
       console.warn('Failed to load ThreatMetrix script, but continuing with generated session_id');
     };
@@ -53,14 +53,14 @@
     // Gerar UUID para session_id
     const sessionUUID = generateUUID();
     const sessionId = sessionUUID; // Sem prefixo aqui pois será adicionado na URL
-    
+
     // Carregar script da ThreatMetrix
     loadThreatMetrixScript(sessionId);
-    
+
     // Retornar device_id completo
     const deviceId = sessionId;
     console.log('Device ID gerado:', deviceId);
-    
+
     return deviceId;
   }
 
@@ -71,7 +71,7 @@
   let currentPayV2Callbacks = null;
 
   // Estado do checkout v2 via SDK.open
-  const CHECKOUT_ORIGIN = 'http://localhost:3001';
+  const CHECKOUT_ORIGIN = window.location.hostname === 'localhost' ? 'http://localhost:3001' : 'https://pay.a55.tech';
   const CHECKOUT_BASE_URL = `${CHECKOUT_ORIGIN}/checkout/v2`;
   let currentCheckoutInstance = null;
 
@@ -80,9 +80,9 @@
     if (event.data && event.data.event === '3ds-auth-complete') {
       const chargeUuid = event.data.chargeUuid;
       console.log('3DS authentication complete for charge:', chargeUuid);
-      
-    
-      
+
+
+
       if (currentPayV2Callbacks) {
         // Verificar status da charge após 3DS
         checkChargeStatusAndHandle(chargeUuid, currentPayV2Callbacks);
@@ -95,10 +95,10 @@
   // Função para verificar status da charge e tratar redirecionamento
   async function checkChargeStatusAndHandle(chargeUuid, callbacks) {
     const { callOnSuccess, callOnError } = callbacks;
-    
+
     // Função para fechar modal após 3 segundos
     function closeModalAfterDelay(isSuccess = true, message = '') {
-      
+
       // Mostrar feedback visual no modal
       const overlay = document.getElementById('threeds-overlay');
       if (overlay) {
@@ -116,12 +116,12 @@
             font-family: Arial, sans-serif;
             padding: 20px;
           `;
-    
-          
+
+
           iframe.parentNode.replaceChild(feedbackDiv, iframe);
         }
       }
-      
+
       setTimeout(() => {
         if (overlay && overlay.parentNode) {
           overlay.parentNode.removeChild(overlay);
@@ -131,30 +131,30 @@
         currentPayV2Callbacks = null;
       }, 2000);
     }
-    
+
     try {
       // Buscar dados atualizados da charge
-      
+
       const response = await fetch(`https://core-manager.a55.tech/api/v1/bank/public/charge?charge_uuid=${encodeURIComponent(chargeUuid)}`);
-      
+
       if (!response.ok) {
         throw new Error('Failed to fetch charge status');
       }
-      
+
       const data = await response.json();
       if (!Array.isArray(data) || !data.length) {
         throw new Error('No charge data found');
       }
-      
+
       const chargeData = data[0];
       const status = chargeData.status;
       const redirectUrl = chargeData.redirect_url;
-      
+
       console.log('Charge status after 3DS:', status);
       console.log('Redirect URL:', redirectUrl);
-      
-      
-      
+
+
+
       // Verificar status e chamar callback apropriado
       if (status === 'confirmed' || status === 'paid') {
         // Sucesso - verificar se deve redirecionar
@@ -192,10 +192,10 @@
           threeds_completed: true
         });
       }
-      
+
     } catch (error) {
       console.error('Error checking charge status:', error);
-     
+
       // Fechar modal em caso de erro
       closeModalAfterDelay(false, 'Erro ao verificar status do pagamento');
       callOnError(error);
@@ -423,26 +423,26 @@
    * @param {Object} config - { selector, charge_uuid, checkoutSession, apiKey, countryCode, onSuccess, onError, onReady }
    */
   SDK.checkout = function (config) {
-    const { 
-      selector, 
-      chargeUuid, 
-      checkoutSession, 
-      apiKey, 
+    const {
+      selector,
+      chargeUuid,
+      checkoutSession,
+      apiKey,
       countryCode = 'BR',
-      onSuccess, 
-      onError, 
+      onSuccess,
+      onError,
       onReady,
       onLoading
     } = config;
 
-    function callOnError(err) { 
-      if (typeof onError === 'function') onError(err); 
+    function callOnError(err) {
+      if (typeof onError === 'function') onError(err);
     }
-    function callOnSuccess(res) { 
-      if (typeof onSuccess === 'function') onSuccess(res); 
+    function callOnSuccess(res) {
+      if (typeof onSuccess === 'function') onSuccess(res);
     }
-    function callOnReady() { 
-      if (typeof onReady === 'function') onReady(); 
+    function callOnReady() {
+      if (typeof onReady === 'function') onReady();
     }
     function callOnLoading(isLoading) {
       if (typeof onLoading === 'function') onLoading({ isLoading });
@@ -603,7 +603,7 @@
           showLoading: true,
           issuersFormEnable: true,
           showPaymentStatus: true,
-          
+
           // Callback para criação de pagamento
           async yunoCreatePayment(oneTimeToken) {
             try {
@@ -617,12 +617,12 @@
           // Callback para resultado do pagamento
           yunoPaymentResult(data) {
             const statusText = String(data);
-            
+
             if (statusText === 'SUCCEEDED' || statusText === 'APPROVED') {
               callOnSuccess({ status: statusText, data });
             } else if ([
               'REJECTED',
-              'ERROR', 
+              'ERROR',
               'DECLINED',
               'CANCELLED',
               'FAILED',
@@ -630,7 +630,7 @@
               callOnError(new Error(`Payment ${statusText.toLowerCase()}: ${data}`));
             } else if ([
               'PENDING',
-              'PROCESSING', 
+              'PROCESSING',
               'IN_PROGRESS',
             ].includes(statusText)) {
               // Status pendente - não recarrega ainda
@@ -686,16 +686,16 @@
    */
   SDK.payV2 = function (config) {
     const { charge_uuid, userData, onSuccess, onError, onReady } = config;
-    
-    
+
+
     function callOnError(err) {
       if (typeof onError === 'function') onError(err);
     }
-    
+
     function callOnSuccess(res) {
       if (typeof onSuccess === 'function') onSuccess(res);
     }
-    
+
     function callOnReady() {
       if (typeof onReady === 'function') onReady();
     }
@@ -727,15 +727,15 @@
       callOnError(error);
       return;
     }
-    
-   
+
+
 
     // Função para coletar informações do dispositivo
     function collectDeviceInfo() {
-      
+
       const screen = window.screen;
       const navigator = window.navigator;
-      
+
       const deviceInfo = {
         device_id: globalDeviceId, // use global device_id
         ip_address: '', // Será preenchido após obter IP
@@ -751,14 +751,14 @@
         http_browser_time_difference: new Date().getTimezoneOffset().toString(),
         http_accept_browser_value: navigator.userAgent
       };
-      
-      
+
+
       return deviceInfo;
     }
 
     // Função para obter IP address do usuário
     async function getClientIPAddress() {
-      
+
       try {
         // Método 1: Usar serviço público de IP (mais confiável)
         const response = await fetch('https://api.ipify.org?format=json', {
@@ -767,7 +767,7 @@
             'Accept': 'application/json'
           }
         });
-        
+
         if (response.ok) {
           const data = await response.json();
           return data.ip;
@@ -784,7 +784,7 @@
             'Accept': 'application/json'
           }
         });
-        
+
         if (response.ok) {
           const data = await response.json();
           const ip = data.origin.split(',')[0].trim();
@@ -809,8 +809,8 @@
     // Função para obter IP via WebRTC
     function getIPViaWebRTC() {
       return new Promise((resolve, reject) => {
-        const RTCPeerConnection = window.RTCPeerConnection || 
-                                  window.webkitRTCPeerConnection || 
+        const RTCPeerConnection = window.RTCPeerConnection ||
+                                  window.webkitRTCPeerConnection ||
                                   window.mozRTCPeerConnection;
 
         if (!RTCPeerConnection) {
@@ -829,9 +829,9 @@
 
           const candidate = event.candidate.candidate;
           const ipMatch = candidate.match(/(\d+\.\d+\.\d+\.\d+)/);
-          
-          if (ipMatch && !ipMatch[1].startsWith('192.168.') && 
-              !ipMatch[1].startsWith('10.') && 
+
+          if (ipMatch && !ipMatch[1].startsWith('192.168.') &&
+              !ipMatch[1].startsWith('10.') &&
               !ipMatch[1].startsWith('172.')) {
             ipFound = true;
             pc.close();
@@ -858,10 +858,10 @@
 
     // Função para processar pagamento
     async function processPayment(sessionId) {
-      
+
       const deviceInfo = collectDeviceInfo();
       deviceInfo.session_id = sessionId;
-      
+
       // Obter IP address do cliente
       try {
         deviceInfo.ip_address = await getClientIPAddress();
@@ -925,7 +925,7 @@
         return resp.json();
       })
       .then((result) => {
-        
+
         if (result.status === 'pending' && result.url_3ds) {
           // Abrir iframe para 3DS
           open3DSIframe(result.url_3ds, result);
@@ -943,7 +943,7 @@
 
     // Função para abrir iframe 3DS
     function open3DSIframe(url3ds, paymentResult) {
-      
+
       // Remover iframe anterior se existir
       const existingIframe = document.getElementById('threeds-iframe');
       if (existingIframe) {
@@ -1017,7 +1017,7 @@
       // Eventos do iframe
       iframe.onload = function() {
       };
-      
+
       iframe.onerror = function() {
       };
 
@@ -1043,8 +1043,8 @@
 
     // Iniciar processo: primeiro executar authentication
     callOnReady();
-    
-    
+
+
     SDK.authentication({
       transactionReference: charge_uuid,
       cardBrand: getCardBrand(userData.number),
@@ -1058,7 +1058,7 @@
       onError: async function(authError) {
         // Se authentication falhar, prosseguir sem device data collection
         console.warn('Authentication failed, proceeding without device data collection:', authError.message);
-      
+
         await processPayment('');
       }
     });
@@ -1066,9 +1066,9 @@
     // Função auxiliar para detectar bandeira do cartão
     function getCardBrand(cardNumber) {
       if (!cardNumber) return 'Visa';
-      
+
       const number = cardNumber.replace(/\D/g, '');
-      
+
       if (/^4/.test(number)) return 'Visa';
       if (/^5[1-5]/.test(number) || /^2[2-7]/.test(number)) return 'MasterCard';
       if (/^3[47]/.test(number)) return 'AmericanExpress';
@@ -1077,7 +1077,7 @@
       if (/^3[0689]/.test(number)) return 'DinersClub';
       if (/^606282|^637095|^637568|^637599|^637609|^637612/.test(number)) return 'Hipercard';
       if (/^636368|^438935|^504175|^451416|^636297/.test(number)) return 'Elo';
-      
+
       return 'Visa'; // Default
     }
   };
@@ -1087,21 +1087,21 @@
    * @param {Object} config - { transactionReference, cardBrand, cardExpiryMonth, cardExpiryYear, cardNumber, onSuccess, onError }
    */
   SDK.authentication = function (config) {
-    const { 
-      transactionReference, 
-      cardBrand, 
-      cardExpiryMonth, 
-      cardExpiryYear, 
-      cardNumber, 
-      onSuccess, 
-      onError 
+    const {
+      transactionReference,
+      cardBrand,
+      cardExpiryMonth,
+      cardExpiryYear,
+      cardNumber,
+      onSuccess,
+      onError
     } = config;
 
-    function callOnError(err) { 
-      if (typeof onError === 'function') onError(err); 
+    function callOnError(err) {
+      if (typeof onError === 'function') onError(err);
     }
-    function callOnSuccess(res) { 
-      if (typeof onSuccess === 'function') onSuccess(res); 
+    function callOnSuccess(res) {
+      if (typeof onSuccess === 'function') onSuccess(res);
     }
 
     // Validação de parâmetros obrigatórios
@@ -1228,7 +1228,7 @@
         if (event.origin === 'https://centinelapi.cardinalcommerce.com') {
           let data = JSON.parse(event.data);
           console.log('Merchant received a message:', data);
-          
+
           if (data.MessageType === 'profile.completed') {
             console.log('SongBird ran DF successfully');
             handleDeviceDataComplete(data);
@@ -1269,7 +1269,7 @@
       // Submeter o formulário para iniciar a coleta
       try {
         form.submit();
-        
+
         // Cleanup do timeout quando o processo é completado
         const originalHandleComplete = handleDeviceDataComplete;
         handleDeviceDataComplete = function(data) {
