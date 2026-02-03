@@ -7,7 +7,7 @@
 ```bash
 # Acesse https://sentry.io
 # Crie um projeto JavaScript
-# Copie o DSN (exemplo): https://abc123@o123.ingest.sentry.io/456
+# Copie o DSN (exemplo): https://<KEY>@<ORG>.ingest.sentry.io/<PROJECT>
 ```
 
 ### 2️⃣ Adicionar o Script do SDK
@@ -22,7 +22,7 @@
 ```javascript
 // Inicializar Sentry (faça isso UMA VEZ, antes de qualquer pagamento)
 A55Pay.initSentry({
-  dsn: 'SEU_DSN_AQUI'
+  dsn: '<SENTRY_DSN>'
 });
 
 // Usar normalmente - Sentry rastreará TUDO automaticamente!
@@ -32,10 +32,10 @@ A55Pay.payV2({
     payer_name: 'João da Silva',
     payer_email: 'joao@example.com',
     holder_name: 'JOAO DA SILVA',
-    number: '1234567890123456',
+    number: '<CARD_NUMBER>',
     expiry_month: '12',
     expiry_year: '2025',
-    ccv: '123',
+    ccv: '<CVC>',
     postal_code: '12345678',
     street: 'Rua Exemplo',
     city: 'São Paulo',
@@ -79,8 +79,7 @@ Para mais detalhes, veja `SENTRY_INTEGRATION.md`
 
 ```javascript
 A55Pay.initSentry({
-  dsn: 'SEU_DSN_AQUI',
+  dsn: '<SENTRY_DSN>',
   environment: window.location.hostname === 'localhost' ? 'development' : 'production'
 });
 ```
-

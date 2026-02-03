@@ -43,7 +43,7 @@ A55Pay.checkout({
   selector: '#yuno-checkout',
   charge_uuid: 'seu-charge-uuid',
   checkoutSession: 'sua-checkout-session',
-  apiKey: 'sua-api-key',
+  apiKey: '<YUNO_PUBLIC_API_KEY>',
   countryCode: 'BR',
   onReady: () => {
     console.log('Checkout pronto');
@@ -73,7 +73,7 @@ A55Pay.checkout({
   selector: '#yuno-checkout',
   charge_uuid: 'seu-charge-uuid',
   checkoutSession: 'sua-checkout-session',
-  apiKey: 'sua-api-key',
+  apiKey: '<YUNO_PUBLIC_API_KEY>',
   onReady: () => {
     // Habilitar botão quando checkout estiver pronto
     document.getElementById('meu-botao-pagamento').disabled = false;

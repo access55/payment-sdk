@@ -29,7 +29,7 @@ A55Pay.checkout({
   selector: '#yuno-checkout-container',
   charge_uuid: 'sua-charge-uuid-aqui',
   checkoutSession: 'sua-checkout-session-aqui',
-  apiKey: 'sua-api-key-publica-yuno',
+  apiKey: '<YUNO_PUBLIC_API_KEY>',
   countryCode: 'BR', // Opcional, padrão: 'BR'
   
   onSuccess: function(result) {
@@ -172,7 +172,7 @@ O SDK adiciona automaticamente a classe `yuno-loading` ao container durante oper
       selector: '#yuno-checkout-container',
       charge_uuid: 'your-charge-uuid-here',
       checkoutSession: 'your-checkout-session-here',
-      apiKey: 'your-yuno-public-api-key',
+      apiKey: '<YUNO_PUBLIC_API_KEY>',
       countryCode: 'BR',
       
       onSuccess: function(result) {

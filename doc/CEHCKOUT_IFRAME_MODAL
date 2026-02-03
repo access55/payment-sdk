@@ -12,8 +12,8 @@
 
 ```json Request
 {
-  "wallet_uuid": "ab878127-3ee4-458c-a59a-87e06507eb26",
-  "merchant_id": "ab878127-3ee4-458c-a59a-87e06507eb26",
+  "wallet_uuid": "<WALLET_UUID>",
+  "merchant_id": "<MERCHANT_ID>",
   "currency": "BRL",
   "billing_type": "installment",
   "charge_type": [
@@ -28,9 +28,9 @@
   "description": "Rental payment split among participants",
   "value": 1200.50,
   "payer_name": "John Silva",
-  "payer_tax_id": "12345678909",
-  "payer_email": "john.silva@example.com",
-  "payer_cell_phone": "+5511998765432",
+  "payer_tax_id": "<PAYER_TAX_ID>",
+  "payer_email": "<PAYER_EMAIL>",
+  "payer_cell_phone": "<PAYER_PHONE>",
   "payer_address": {
     "street": "Flowers Street",
     "address_number": "123",
@@ -79,9 +79,9 @@
 ```
 ```json Response
 {
-  "payment_link_uuid": "0b9bffcb-2d96-42bb-8641-279bfc8aac19",
+  "payment_link_uuid": "<PAYMENT_LINK_UUID>",
   "status": "active",
-  "url": "https://pay.a55.tech/checkout/0b9bffcb-2d96-42bb-8641-279bfc8aac19",
+  "url": "https://pay.a55.tech/checkout/<PAYMENT_LINK_UUID>",
   "local_currency": 1,
   "currency": "BRL",
   "usd_currency": 0.18,
@@ -129,7 +129,7 @@ Use the `payment_link_uuid` (also called `checkoutUuid`) returned from the API t
 
 ```javascript
 A55Pay.open({
-  checkoutUuid: '0b9bffcb-2d96-42bb-8641-279bfc8aac19',
+  checkoutUuid: '<PAYMENT_LINK_UUID>',
   display: 'modal', // 'modal' or 'embed'
   containerId: 'checkout-container', // Only required for 'embed' mode
   
@@ -184,7 +184,7 @@ Opens the checkout in a **centered modal overlay** with a modern design, backdro
   <script>
     function openCheckout() {
       A55Pay.open({
-        checkoutUuid: '0b9bffcb-2d96-42bb-8641-279bfc8aac19',
+        checkoutUuid: '<PAYMENT_LINK_UUID>',
         display: 'modal',
         
         onSuccess: (data) => {
@@ -233,7 +233,7 @@ Embeds the checkout **inline** within a specific container on your page:
   <script src="https://cdn.jsdelivr.net/npm/a55pay-sdk"></script>
   <script>
     A55Pay.open({
-      checkoutUuid: '0b9bffcb-2d96-42bb-8641-279bfc8aac19',
+      checkoutUuid: '<PAYMENT_LINK_UUID>',
       display: 'embed',
       containerId: 'checkout-container',
       
@@ -315,7 +315,7 @@ You can close the checkout programmatically by storing the return value:
 
 ```javascript
 const checkoutInstance = A55Pay.open({
-  checkoutUuid: '0b9bffcb-2d96-42bb-8641-279bfc8aac19',
+  checkoutUuid: '<PAYMENT_LINK_UUID>',
   display: 'modal',
   onSuccess: (data) => console.log(data)
 });
@@ -330,7 +330,7 @@ setTimeout(() => {
 
 ```javascript
 A55Pay.open({
-  checkoutUuid: '0b9bffcb-2d96-42bb-8641-279bfc8aac19',
+  checkoutUuid: '<PAYMENT_LINK_UUID>',
   
   onEvent: (event) => {
     switch(event.event) {

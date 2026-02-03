@@ -43,7 +43,7 @@ A55Pay.authentication({
   cardBrand: "Visa",
   cardExpiryMonth: "08", 
   cardExpiryYear: "2029",
-  cardNumber: "4111111111111111",
+  cardNumber: "<CARD_NUMBER>",
   onSuccess: function(result) {
     // Device Data Collection completado
     const sessionId = result.sessionId;
@@ -101,9 +101,9 @@ Executa o Device Data Collection da CyberSource para melhorar aprovação 3DS.
 
 ```javascript
 {
-  sessionId: "71865b52-53a1-4cc3-a0ad-beab2d9b50e5",
-  accessToken: "eyJhbGciOiJIUzI1NiI...",
-  referenceId: "71865b52-53a1-4cc3-a0ad-beab2d9b50e5",
+  sessionId: "<SESSION_ID>",
+  accessToken: "<JWT>",
+  referenceId: "<REFERENCE_ID>",
   deviceDataCollection: "completed"
 }
 ```
@@ -128,11 +128,11 @@ Executa o Device Data Collection da CyberSource para melhorar aprovação 3DS.
         document.getElementById('payButton').addEventListener('click', function() {
             // 1. Executar Device Data Collection
             A55Pay.authentication({
-                transactionReference: "7f879488-ab26-4609-b742-2b355ac1631a",
+                transactionReference: "<TRANSACTION_REFERENCE>",
                 cardBrand: "Visa",
                 cardExpiryMonth: "08",
                 cardExpiryYear: "2029", 
-                cardNumber: "4111111111111111",
+                cardNumber: "<CARD_NUMBER>",
                 
                 onSuccess: function(result) {
                     console.log('Device Data Collection completo');
@@ -181,18 +181,18 @@ POST https://core-manager.a55.tech/api/v1/bank/public/setup-authentication
 ### Payload de entrada:
 ```json
 {
-  "transaction_reference": "7f879488-ab26-4609-b742-2b355ac1631a",
+  "transaction_reference": "<TRANSACTION_REFERENCE>",
   "card_brand": "Visa",
   "card_expiry_month": "08",
   "card_expiry_year": "2029",
-  "card_number": "4111111111111111"
+  "card_number": "<CARD_NUMBER>"
 }
 ```
 
 ### Resposta esperada:
 ```json
 {
-  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "access_token": "<JWT>",
   "reference_id": "71865b52-53a1-4cc3-a0ad-beab2d9b50e5",
   "device_data_collection_url": "https://centinelapistag.cardinalcommerce.com/V1/Cruise/Collect"
 }
@@ -215,7 +215,7 @@ A funcionalidade segue exatamente a documentação oficial da CyberSource:
 <iframe id="ddc-iframe" name="ddc-iframe" height="1" width="1" style="display: none;"></iframe>
 
 <form id="ddc-form" target="ddc-iframe" method="POST" action="https://centinelapistag.cardinalcommerce.com/V1/Cruise/Collect">
-    <input type="hidden" name="JWT" value="eyJhbGciOiJIUzI1NiI...">
+    <input type="hidden" name="JWT" value="<JWT>">
 </form>
 ```
 

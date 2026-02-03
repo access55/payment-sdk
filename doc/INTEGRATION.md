@@ -19,18 +19,18 @@ The A55Pay SDK provides a simple way to integrate 3DS and payment submission int
   // Example: userData from your checkout form
   const userData = {
     holder: 'John Doe',
-    number: '4111 1111 1111 1111',
+    number: '<CARD_NUMBER>',
     month: '12',
     year: '2028',
-    cvc: '123',
-    phone: '5511999999999',
+    cvc: '<CVC>',
+    phone: '<PHONE_NUMBER>',
     street1: 'Rua Exemplo',
     street2: '',
     city: 'São Paulo',
     state: 'SP',
     zipcode: '01234567',
     country: 'BR',
-    device_ipaddress: '1.2.3.4' // (optional, can be fetched by SDK)
+    device_ipaddress: '<IP_ADDRESS>' // (optional, can be fetched by SDK)
   };
 
   A55Pay.pay({

@@ -13,14 +13,14 @@ Primeiro, você precisa criar um projeto no Sentry e obter o DSN (Data Source Na
 1. Acesse [sentry.io](https://sentry.io)
 2. Crie uma conta ou faça login
 3. Crie um novo projeto (tipo: JavaScript)
-4. Copie o DSN fornecido (formato: `https://[key]@[organization].ingest.sentry.io/[project]`)
+4. Copie o DSN fornecido (formato: `https://<KEY>@<ORG>.ingest.sentry.io/<PROJECT>`)
 
 ### 2. Inicializar o Sentry no SDK
 
 ```javascript
 // Inicializar o Sentry antes de usar o SDK
 A55Pay.initSentry({
-  dsn: 'https://seu-dsn@sentry.io/projeto',
+  dsn: '<SENTRY_DSN>',
   environment: 'production', // ou 'development', 'staging', etc.
   tracesSampleRate: 1.0,
   replaysSessionSampleRate: 0.1,
@@ -154,7 +154,7 @@ Após configurar, você poderá ver no dashboard do Sentry:
     <script>
         // Inicializar Sentry
         A55Pay.initSentry({
-            dsn: 'https://abc123@o123.ingest.sentry.io/456',
+            dsn: '<SENTRY_DSN>',
             environment: 'production'
         });
 
@@ -175,7 +175,7 @@ Após configurar, você poderá ver no dashboard do Sentry:
 ```javascript
 // Inicializar com configurações avançadas
 A55Pay.initSentry({
-    dsn: 'https://abc123@o123.ingest.sentry.io/456',
+    dsn: '<SENTRY_DSN>',
     environment: window.location.hostname === 'localhost' ? 'development' : 'production',
     
     // Capturar 100% das transações em desenvolvimento, 20% em produção
@@ -297,4 +297,3 @@ O SDK automaticamente:
 **Versão do SDK**: 1.0.15
 **Data**: Novembro 2025
 **Desenvolvido por**: Access55
-
