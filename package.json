@@ -10,6 +10,14 @@
   },
   "author": "Access55",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/access55/payment-sdk.git"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "devDependencies": {
     "esbuild": "^0.25.8"
   },

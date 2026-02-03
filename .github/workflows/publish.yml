@@ -2,9 +2,13 @@ name: Publish to npm
 
 on:
   push:
-    branches:
-      - main
+    tags:
+      - 'v*'
   workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
 
 jobs:
   build-and-publish:
@@ -19,9 +23,12 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: '20'
+          node-version: '24'
           registry-url: 'https://registry.npmjs.org/'
           cache: 'pnpm'
+
+      - name: Ensure latest npm
+        run: npm install -g npm@latest
 
       - name: Install dependencies
         run: pnpm install
@@ -29,25 +36,8 @@ jobs:
       - name: Build SDK
         run: pnpm run build
 
-      - name: Bump patch version
-        run: |
-          npm version patch --no-git-tag-version
-
       - name: Publish to npm
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          pnpm publish --access public --no-git-checks
-
-      - name: Push version bump to repo
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add package.json pnpm-lock.yaml || true
-          git commit -m "ci: bump version [skip ci]" || exit 0
-          git push origin HEAD:main
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm publish --access public --provenance
 
       - name: Purge jsDelivr CDN cache
         uses: gacts/purge-jsdelivr-cache@v1.1.2
