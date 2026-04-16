@@ -175,7 +175,7 @@ Executa o Device Data Collection da CyberSource para melhorar aprovação 3DS.
 
 ### Endpoint necessário:
 ```
-POST https://core-manager.a55.tech/api/v1/bank/public/setup-authentication
+POST https://app.a55.tech/api/v1/bank/public/setup-authentication
 ```
 
 ### Payload de entrada:

@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>A55Pay SDK - Exemplo Apple Pay</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 24px; max-width: 640px; margin: 0 auto; }
+    label { display: block; margin-top: 12px; font-weight: 600; }
+    input { padding: 8px; width: 100%; max-width: 480px; box-sizing: border-box; }
+    .row { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 20px; align-items: center; }
+    .log { margin-top: 24px; background: #f6f6f6; padding: 12px; height: 220px; overflow: auto; font-size: 12px; font-family: monospace; border-radius: 4px; }
+    #unavailable-msg { color: #b00; margin-top: 16px; font-size: 14px; display: none; }
+
+    /* Botao Apple Pay - seguindo Apple Human Interface Guidelines */
+    apple-pay-button {
+      --apple-pay-button-width: 240px;
+      --apple-pay-button-height: 44px;
+      --apple-pay-button-border-radius: 8px;
+      --apple-pay-button-padding: 0px 0px;
+      --apple-pay-button-box-sizing: border-box;
+      display: inline-block;
+    }
+
+    /* Fallback para browsers sem suporte ao elemento apple-pay-button */
+    #applepay-btn-fallback {
+      display: none;
+      background: #000;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 12px 24px;
+      font-size: 16px;
+      cursor: pointer;
+      min-width: 240px;
+    }
+  </style>
+</head>
+<body>
+  <h1>A55Pay - Apple Pay</h1>
+  <p>Exemplo de pagamento via Apple Pay usando <code>A55Pay.startApplePay()</code>.</p>
+  <p><strong>Requisitos:</strong> Safari em macOS/iOS com um cartao configurado na Wallet.</p>
+
+  <label for="chargeUuid">chargeUuid <small>(obrigatorio)</small></label>
+  <input id="chargeUuid" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
+
+  <label for="merchantIdentifier">merchantIdentifier <small>(obrigatorio)</small></label>
+  <input id="merchantIdentifier" type="text" placeholder="merchant.com.suaempresa.pay" />
+
+  <label for="countryCode">countryCode <small>(obrigatorio — ISO 3166-1 alpha-2, ex: BR)</small></label>
+  <input id="countryCode" type="text" value="BR" maxlength="2" style="text-transform:uppercase" />
+
+  <label for="merchantDomain">merchantDomain</label>
+  <input id="merchantDomain" type="text" value="pay.a55.tech" />
+
+  <label for="displayName">displayName</label>
+  <input id="displayName" type="text" value="A55Pay" />
+
+  <div id="unavailable-msg">
+    Apple Pay nao esta disponivel neste dispositivo ou browser. Use Safari em macOS/iOS com um cartao configurado na Wallet.
+  </div>
+
+  <div class="row">
+    <!-- Elemento nativo Apple Pay (Safari 12.1+) -->
+    <apple-pay-button id="applepay-native-btn" buttonstyle="black" type="pay" locale="pt-BR"></apple-pay-button>
+    <!-- Fallback para outros browsers (apenas para teste visual) -->
+    <button id="applepay-btn-fallback">Pagar com Apple Pay</button>
+  </div>
+
+  <div class="log" id="log"></div>
+
+  <script src="../src/a55pay-sdk.js"></script>
+  <script>
+    var logEl = document.getElementById('log');
+    var nativeBtn = document.getElementById('applepay-native-btn');
+    var fallbackBtn = document.getElementById('applepay-btn-fallback');
+    var unavailableMsg = document.getElementById('unavailable-msg');
+
+    function log(label, data) {
+      var time = new Date().toISOString();
+      var line = document.createElement('div');
+      line.textContent = '[' + time + '] ' + label + (data !== undefined ? ' ' + JSON.stringify(data, null, 0) : '');
+      logEl.appendChild(line);
+      logEl.scrollTop = logEl.scrollHeight;
+      console.log(label, data);
+    }
+
+    function getConfig() {
+      return {
+        chargeUuid: document.getElementById('chargeUuid').value.trim(),
+        merchantIdentifier: document.getElementById('merchantIdentifier').value.trim(),
+        countryCode: document.getElementById('countryCode').value.trim().toUpperCase(),
+        merchantDomain: document.getElementById('merchantDomain').value.trim() || 'pay.a55.tech',
+        displayName: document.getElementById('displayName').value.trim() || 'A55Pay'
+      };
+    }
+
+    function startApplePay() {
+      var cfg = getConfig();
+
+      if (!cfg.chargeUuid) {
+        log('ERRO: chargeUuid e obrigatorio');
+        return;
+      }
+      if (!cfg.merchantIdentifier) {
+        log('ERRO: merchantIdentifier e obrigatorio');
+        return;
+      }
+      if (!cfg.countryCode || !/^[A-Z]{2}$/.test(cfg.countryCode)) {
+        log('ERRO: countryCode invalido — informe um codigo ISO 3166-1 alpha-2 (ex: BR)');
+        return;
+      }
+
+      log('Iniciando Apple Pay...', { chargeUuid: cfg.chargeUuid });
+
+      A55Pay.startApplePay({
+        chargeUuid: cfg.chargeUuid,
+        merchantIdentifier: cfg.merchantIdentifier,
+        countryCode: cfg.countryCode,
+        merchantDomain: cfg.merchantDomain,
+        displayName: cfg.displayName,
+        supportedNetworks: ['visa', 'masterCard', 'elo', 'amex'],
+        onSuccess: function(result) {
+          log('onSuccess - pagamento aprovado', result);
+        },
+        onError: function(error) {
+          log('onError', { message: error && error.message ? error.message : String(error) });
+        },
+        onClose: function() {
+          log('onClose - usuario cancelou o payment sheet');
+        }
+      });
+    }
+
+    // Verificar disponibilidade ao carregar a pagina
+    if (A55Pay.isApplePayAvailable()) {
+      log('Apple Pay disponivel neste dispositivo');
+      nativeBtn.style.display = 'inline-block';
+      nativeBtn.addEventListener('click', startApplePay);
+    } else {
+      log('Apple Pay NAO disponivel neste dispositivo ou browser');
+      unavailableMsg.style.display = 'block';
+      // Exibe botao fallback apenas para fins de teste em browsers sem Apple Pay
+      fallbackBtn.style.display = 'inline-block';
+      fallbackBtn.addEventListener('click', function() {
+        log('Tentando Apple Pay em browser sem suporte (apenas para teste)...');
+        startApplePay();
+      });
+    }
+  </script>
+</body>
+</html>

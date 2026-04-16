@@ -70,6 +70,11 @@
   // Variáveis globais para callbacks do payV2
   let currentPayV2Callbacks = null;
 
+  // Base URL da API A55
+  const API_BASE_URL = window.location.hostname === 'localhost'
+    ? 'http://localhost:8494'
+    : 'https://api.a55.tech';
+
   // Estado do checkout v2 via SDK.open
   const CHECKOUT_ORIGIN = window.location.hostname === 'localhost' ? 'http://localhost:3001' : 'https://pay.a55.tech';
   const CHECKOUT_BASE_URL = `${CHECKOUT_ORIGIN}/checkout/v2`;
@@ -135,7 +140,7 @@
     try {
       // Buscar dados atualizados da charge
 
-      const response = await fetch(`https://core-manager.a55.tech/api/v1/bank/public/charge?charge_uuid=${encodeURIComponent(chargeUuid)}`);
+      const response = await fetch(`${API_BASE_URL}/api/v1/bank/public/charge?charge_uuid=${encodeURIComponent(chargeUuid)}`);
 
       if (!response.ok) {
         throw new Error('Failed to fetch charge status');
@@ -247,7 +252,7 @@
         },
         ...(a55Data.threeds_auth ? { threeds_auth: a55Data.threeds_auth } : {}),
       };
-      fetch(`https://core-manager.a55.tech/api/v1/bank/public/charge/${a55Data.charge_uuid}/pay`, {
+      fetch(`${API_BASE_URL}/api/v1/bank/public/charge/${a55Data.charge_uuid}/pay`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -270,7 +275,7 @@
     }
 
     // Fetch a55Data from API
-    fetch(`https://core-manager.a55.tech/api/v1/bank/public/charge?charge_uuid=${encodeURIComponent(charge_uuid)}`)
+    fetch(`${API_BASE_URL}/api/v1/bank/public/charge?charge_uuid=${encodeURIComponent(charge_uuid)}`)
       .then(async (resp) => {
         if (!resp.ok) {
           const err = await resp.json().catch(() => ({}));
@@ -910,7 +915,7 @@
         }
       };
 
-      fetch(`https://core-manager.a55.tech/api/v1/bank/public/charge/${charge_uuid}/pay`, {
+      fetch(`${API_BASE_URL}/api/v1/bank/public/charge/${charge_uuid}/pay`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -1127,7 +1132,7 @@
     };
 
     // Chamar o backend para setup da autenticação
-    fetch('https://core-manager.a55.tech/api/v1/bank/public/setup-authentication', {
+    fetch(`${API_BASE_URL}/api/v1/bank/public/setup-authentication`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -1501,6 +1506,223 @@
 
     currentCheckoutInstance = null;
   }
+
+  /**
+   * Verifica se o Apple Pay esta disponivel no browser/dispositivo atual.
+   * @returns {boolean}
+   */
+  SDK.isApplePayAvailable = function() {
+    try {
+      return !!(window.ApplePaySession && ApplePaySession.canMakePayments());
+    } catch (e) {
+      return false;
+    }
+  };
+
+  // Controle de sessao Apple Pay em andamento (idempotencia)
+  let _applePayInProgress = false;
+
+  /**
+   * Inicia pagamento via Apple Pay.
+   *
+   * IMPORTANTE: deve ser chamado dentro de um handler de clique do usuario.
+   *
+   * @param {Object} config
+   * @param {string} config.chargeUuid           - UUID da charge (obrigatorio)
+   * @param {string} config.merchantIdentifier   - Merchant identifier Apple (obrigatorio)
+   * @param {string} [config.merchantDomain]     - Dominio do merchant (default: 'pay.a55.tech')
+   * @param {string} [config.displayName]        - Nome exibido no payment sheet (default: 'A55Pay')
+   * @param {string[]} [config.supportedNetworks] - Redes suportadas (default: visa, masterCard, elo, amex)
+   * @param {function} [config.onSuccess]        - Chamado apos pagamento processado com sucesso
+   * @param {function} [config.onError]          - Chamado em caso de erro
+   * @param {function} [config.onClose]          - Chamado quando o usuario cancela o payment sheet
+   */
+  SDK.startApplePay = function(config) {
+    const {
+      chargeUuid,
+      merchantIdentifier,
+      countryCode,
+      merchantDomain = 'pay.a55.tech',
+      displayName = 'A55Pay',
+      supportedNetworks = ['visa', 'masterCard', 'elo', 'amex'],
+      onSuccess,
+      onError,
+      onClose
+    } = config || {};
+
+    function callOnSuccess(res) { if (typeof onSuccess === 'function') onSuccess(res); }
+    function callOnError(err) { if (typeof onError === 'function') onError(err); }
+    function callOnClose() { if (typeof onClose === 'function') onClose(); }
+
+    // Validacoes obrigatorias
+    if (!chargeUuid) {
+      callOnError(new Error('chargeUuid e obrigatorio para A55Pay.startApplePay()'));
+      return;
+    }
+    if (!merchantIdentifier) {
+      callOnError(new Error('merchantIdentifier e obrigatorio para A55Pay.startApplePay()'));
+      return;
+    }
+    if (!countryCode || typeof countryCode !== 'string' || !/^[A-Z]{2}$/.test(countryCode)) {
+      callOnError(new Error('countryCode e obrigatorio e deve ser um codigo ISO 3166-1 alpha-2 valido (ex: "BR", "US")'));
+      return;
+    }
+
+    // Verificar suporte ao Apple Pay
+    if (!SDK.isApplePayAvailable()) {
+      callOnError(new Error('Apple Pay nao esta disponivel neste dispositivo ou browser'));
+      return;
+    }
+
+    // Idempotencia: evitar multiplas sessoes simultaneas
+    if (_applePayInProgress) {
+      callOnError(new Error('Uma sessao Apple Pay ja esta em andamento'));
+      return;
+    }
+    _applePayInProgress = true;
+
+    function releaseApplePayLock() {
+      _applePayInProgress = false;
+    }
+
+    // Passo 1: Buscar dados da charge para obter valor e moeda
+    fetch(`${API_BASE_URL}/api/v1/bank/public/charge?charge_uuid=${encodeURIComponent(chargeUuid)}`)
+      .then(function(resp) {
+        if (!resp.ok) {
+          return resp.json().catch(function() { return {}; }).then(function(err) {
+            throw new Error(err.message || 'Falha ao buscar dados da charge');
+          });
+        }
+        return resp.json();
+      })
+      .then(function(data) {
+        if (!Array.isArray(data) || !data.length) {
+          throw new Error('Nenhum dado encontrado para o chargeUuid informado');
+        }
+
+        var chargeData = data[0];
+
+        // Passo 2: Montar paymentRequest e criar ApplePaySession
+        var paymentRequest = {
+          countryCode: countryCode,
+          currencyCode: chargeData.currency || 'BRL',
+          merchantCapabilities: ['supports3DS'],
+          supportedNetworks: supportedNetworks,
+          total: {
+            label: displayName,
+            amount: String(chargeData.value)
+          }
+        };
+
+        var session;
+        try {
+          session = new ApplePaySession(3, paymentRequest);
+        } catch (e) {
+          releaseApplePayLock();
+          callOnError(new Error('Falha ao criar ApplePaySession: ' + e.message));
+          return;
+        }
+
+        // Passo 3: Merchant validation
+        session.onvalidatemerchant = function(event) {
+          var merchantValidationTimeout = setTimeout(function() {
+            releaseApplePayLock();
+            session.abort();
+            callOnError(new Error('Timeout na validacao do merchant Apple Pay'));
+          }, 10000);
+
+          fetch(`${API_BASE_URL}/api/v1/bank/public/charge/applepay/${encodeURIComponent(chargeUuid)}/session`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'accept': 'application/json' },
+            body: JSON.stringify({
+              validation_url: event.validationURL,
+              merchant_domain: merchantDomain,
+              display_name: displayName
+            })
+          })
+          .then(function(resp) {
+            clearTimeout(merchantValidationTimeout);
+            if (!resp.ok) {
+              return resp.json().catch(function() { return {}; }).then(function(err) {
+                throw new Error(err.message || 'Falha na validacao do merchant Apple Pay');
+              });
+            }
+            return resp.json();
+          })
+          .then(function(merchantSession) {
+            session.completeMerchantValidation(merchantSession);
+          })
+          .catch(function(err) {
+            clearTimeout(merchantValidationTimeout);
+            releaseApplePayLock();
+            session.abort();
+            callOnError(err);
+          });
+        };
+
+        // Passo 4: Pagamento autorizado pelo usuario (Face ID / Touch ID)
+        session.onpaymentauthorized = function(event) {
+          var token = event.payment.token;
+          var paymentMethod = token.paymentMethod || {};
+          var paymentData = token.paymentData || {};
+          var header = paymentData.header || {};
+
+          // De-para: tipo Apple Pay -> tipo A55
+          // Apple retorna: 'credit', 'debit', 'prepaid', 'store'
+          var appleTypeMap = {
+            credit:  'credit_card',
+            debit:   'debit_card',
+            prepaid: 'debit_card',
+            store:   'credit_card'
+          };
+          var cardType = appleTypeMap[paymentMethod.type] || 'credit_card';
+
+          var applePayPayload = {
+            applepay: {
+              type: cardType,
+              wallet_key: JSON.stringify(paymentData),
+              ephemeral_public_key: header.ephemeralPublicKey || ''
+            }
+          };
+
+          fetch(`${API_BASE_URL}/api/v1/bank/public/charge/${encodeURIComponent(chargeUuid)}/pay`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(applePayPayload)
+          })
+          .then(function(resp) {
+            if (!resp.ok) {
+              return resp.json().catch(function() { return {}; }).then(function(err) {
+                throw new Error(err.message || 'Falha ao processar pagamento Apple Pay');
+              });
+            }
+            return resp.json();
+          })
+          .then(function(result) {
+            session.completePayment(ApplePaySession.STATUS_SUCCESS);
+            releaseApplePayLock();
+            callOnSuccess(result);
+          })
+          .catch(function(err) {
+            session.completePayment(ApplePaySession.STATUS_FAILURE);
+            releaseApplePayLock();
+            callOnError(err);
+          });
+        };
+
+        // Passo 5: Usuario cancelou o payment sheet
+        session.oncancel = function() {
+          releaseApplePayLock();
+          callOnClose();
+        };
+
+        session.begin();
+      })
+      .catch(function(err) {
+        releaseApplePayLock();
+        callOnError(err);
+      });
+  };
 
   // Expose globally
   global.A55Pay = SDK;
