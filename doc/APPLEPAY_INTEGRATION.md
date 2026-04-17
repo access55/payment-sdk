@@ -45,7 +45,9 @@ Inicia o fluxo de pagamento Apple Pay. **Deve ser chamado dentro de um handler d
 | Parametro           | Tipo       | Obrigatorio | Descricao |
 |---------------------|------------|-------------|-----------|
 | `chargeUuid`        | `string`   | sim         | UUID da charge criada via API A55 com tipo `applepay` |
-| `countryCode`       | `string`   | sim         | Codigo do pais no formato ISO 3166-1 alpha-2 (ex: `'BR'`, `'US'`). Validado por regex `/^[A-Z]{2}$/` |
+| `countryCode`       | `string`   | sim         | Codigo do pais ISO 3166-1 alpha-2 (ex: `'BR'`, `'US'`). Validado por regex `/^[A-Z]{2}$/` |
+| `amount`            | `string`   | sim         | Valor do pagamento (ex: `'150.00'`). Deve ser numerico valido |
+| `currencyCode`      | `string`   | nao         | Codigo da moeda ISO 4217 (default: `'BRL'`) |
 | `merchantDomain`    | `string`   | nao         | Dominio do merchant (default: `'pay.a55.tech'`) |
 | `displayName`       | `string`   | nao         | Nome exibido no payment sheet (default: `'A55Pay'`) |
 | `supportedNetworks` | `string[]` | nao         | Redes suportadas (default: `['visa', 'masterCard', 'elo', 'amex']`) |
@@ -73,6 +75,8 @@ Inicia o fluxo de pagamento Apple Pay. **Deve ser chamado dentro de um handler d
     A55Pay.startApplePay({
       chargeUuid: 'UUID_DA_CHARGE',
       countryCode: 'BR',
+      amount: '150.00',
+      currencyCode: 'BRL',
       merchantDomain: 'www.suaempresa.com.br',
       displayName: 'Sua Empresa',
       supportedNetworks: ['visa', 'masterCard', 'elo', 'amex'],
@@ -103,8 +107,7 @@ Inicia o fluxo de pagamento Apple Pay. **Deve ser chamado dentro de um handler d
 ```
 Clique do usuario
   └─> A55Pay.startApplePay()
-        ├─> GET /api/v1/bank/public/charge?charge_uuid={uuid}      # busca valor/moeda
-        ├─> new ApplePaySession(3, paymentRequest)
+        ├─> new ApplePaySession(3, paymentRequest)   # sincrono, usa amount/currencyCode do config
         ├─> session.begin()
         │
         ├─> onvalidatemerchant
@@ -148,6 +151,7 @@ O campo `wallet_key` contem o `paymentData` completo serializado como string JSO
 | Browser sem suporte | `'Apple Pay nao esta disponivel neste dispositivo ou browser'` |
 | `chargeUuid` ausente | `'chargeUuid e obrigatorio para A55Pay.startApplePay()'` |
 | `countryCode` ausente ou invalido | `'countryCode e obrigatorio e deve ser um codigo ISO 3166-1 alpha-2 valido (ex: "BR", "US")'` |
+| `amount` ausente ou invalido | `'amount e obrigatorio e deve ser um valor numerico valido (ex: "150.00")'` |
 | Sessao ja em andamento | `'Uma sessao Apple Pay ja esta em andamento'` |
 | Falha ao buscar charge | `'Falha ao buscar dados da charge'` |
 | Falha ao criar sessao | `'Falha ao criar ApplePaySession: <detalhe>'` |

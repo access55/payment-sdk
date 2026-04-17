@@ -44,8 +44,14 @@
   <label for="chargeUuid">chargeUuid <small>(obrigatorio)</small></label>
   <input id="chargeUuid" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
 
+  <label for="amount">amount <small>(obrigatorio, ex: 150.00)</small></label>
+  <input id="amount" type="text" placeholder="150.00" />
+
   <label for="countryCode">countryCode <small>(obrigatorio — ISO 3166-1 alpha-2, ex: BR)</small></label>
   <input id="countryCode" type="text" value="BR" maxlength="2" style="text-transform:uppercase" />
+
+  <label for="currencyCode">currencyCode</label>
+  <input id="currencyCode" type="text" value="BRL" maxlength="3" style="text-transform:uppercase" />
 
   <label for="merchantDomain">merchantDomain</label>
   <input id="merchantDomain" type="text" value="pay.a55.tech" />
@@ -85,7 +91,9 @@
     function getConfig() {
       return {
         chargeUuid: document.getElementById('chargeUuid').value.trim(),
+        amount: document.getElementById('amount').value.trim(),
         countryCode: document.getElementById('countryCode').value.trim().toUpperCase(),
+        currencyCode: document.getElementById('currencyCode').value.trim().toUpperCase() || 'BRL',
         merchantDomain: document.getElementById('merchantDomain').value.trim() || 'pay.a55.tech',
         displayName: document.getElementById('displayName').value.trim() || 'A55Pay'
       };
@@ -98,16 +106,22 @@
         log('ERRO: chargeUuid e obrigatorio');
         return;
       }
+      if (!cfg.amount || isNaN(parseFloat(cfg.amount))) {
+        log('ERRO: amount e obrigatorio e deve ser um valor numerico (ex: 150.00)');
+        return;
+      }
       if (!cfg.countryCode || !/^[A-Z]{2}$/.test(cfg.countryCode)) {
         log('ERRO: countryCode invalido — informe um codigo ISO 3166-1 alpha-2 (ex: BR)');
         return;
       }
 
-      log('Iniciando Apple Pay...', { chargeUuid: cfg.chargeUuid });
+      log('Iniciando Apple Pay...', { chargeUuid: cfg.chargeUuid, amount: cfg.amount });
 
       A55Pay.startApplePay({
         chargeUuid: cfg.chargeUuid,
+        amount: cfg.amount,
         countryCode: cfg.countryCode,
+        currencyCode: cfg.currencyCode,
         merchantDomain: cfg.merchantDomain,
         displayName: cfg.displayName,
         supportedNetworks: ['visa', 'masterCard', 'elo', 'amex'],

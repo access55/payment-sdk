@@ -1526,9 +1526,13 @@
    * Inicia pagamento via Apple Pay.
    *
    * IMPORTANTE: deve ser chamado dentro de um handler de clique do usuario.
+   * O ApplePaySession e criado sincronamente para manter a cadeia de user gesture.
    *
    * @param {Object} config
    * @param {string} config.chargeUuid           - UUID da charge (obrigatorio)
+   * @param {string} config.countryCode          - Codigo do pais ISO 3166-1 alpha-2 (obrigatorio, ex: 'BR')
+   * @param {string} config.amount               - Valor do pagamento (obrigatorio, ex: '150.00')
+   * @param {string} [config.currencyCode='BRL'] - Codigo da moeda ISO 4217 (default: 'BRL')
    * @param {string} [config.merchantDomain]     - Dominio do merchant (default: 'pay.a55.tech')
    * @param {string} [config.displayName]        - Nome exibido no payment sheet (default: 'A55Pay')
    * @param {string[]} [config.supportedNetworks] - Redes suportadas (default: visa, masterCard, elo, amex)
@@ -1540,6 +1544,8 @@
     const {
       chargeUuid,
       countryCode,
+      amount,
+      currencyCode = 'BRL',
       merchantDomain = 'pay.a55.tech',
       displayName = 'A55Pay',
       supportedNetworks = ['visa', 'masterCard', 'elo', 'amex'],
@@ -1552,7 +1558,7 @@
     function callOnError(err) { if (typeof onError === 'function') onError(err); }
     function callOnClose() { if (typeof onClose === 'function') onClose(); }
 
-    // Validacoes obrigatorias
+    // Validacoes obrigatorias (todas sincronas, antes de criar a sessao)
     if (!chargeUuid) {
       callOnError(new Error('chargeUuid e obrigatorio para A55Pay.startApplePay()'));
       return;
@@ -1561,14 +1567,16 @@
       callOnError(new Error('countryCode e obrigatorio e deve ser um codigo ISO 3166-1 alpha-2 valido (ex: "BR", "US")'));
       return;
     }
+    if (!amount || isNaN(parseFloat(amount))) {
+      callOnError(new Error('amount e obrigatorio e deve ser um valor numerico valido (ex: "150.00")'));
+      return;
+    }
 
-    // Verificar suporte ao Apple Pay
     if (!SDK.isApplePayAvailable()) {
       callOnError(new Error('Apple Pay nao esta disponivel neste dispositivo ou browser'));
       return;
     }
 
-    // Idempotencia: evitar multiplas sessoes simultaneas
     if (_applePayInProgress) {
       callOnError(new Error('Uma sessao Apple Pay ja esta em andamento'));
       return;
@@ -1579,12 +1587,41 @@
       _applePayInProgress = false;
     }
 
-    // Passo 1: Buscar dados da charge para obter valor e moeda
-    fetch(`${API_BASE_URL}/api/v1/bank/public/charge?charge_uuid=${encodeURIComponent(chargeUuid)}`)
+    // Criacao sincrona do ApplePaySession (dentro do user gesture)
+    var paymentRequest = {
+      countryCode: countryCode,
+      currencyCode: currencyCode,
+      merchantCapabilities: ['supports3DS'],
+      supportedNetworks: supportedNetworks,
+      total: {
+        label: displayName,
+        amount: String(amount)
+      }
+    };
+
+    var session;
+    try {
+      session = new ApplePaySession(3, paymentRequest);
+    } catch (e) {
+      releaseApplePayLock();
+      callOnError(new Error('Falha ao criar ApplePaySession: ' + e.message));
+      return;
+    }
+
+    // Merchant validation (async, ja permitido apos session.begin())
+    session.onvalidatemerchant = function(event) {
+      var merchantValidationTimeout = setTimeout(function() {
+        releaseApplePayLock();
+        session.abort();
+        callOnError(new Error('Timeout na validacao do merchant Apple Pay'));
+      }, 10000);
+
+      // Validar amount contra o valor real da charge antes de prosseguir
+      fetch(`${API_BASE_URL}/api/v1/bank/public/charge?charge_uuid=${encodeURIComponent(chargeUuid)}`)
       .then(function(resp) {
         if (!resp.ok) {
           return resp.json().catch(function() { return {}; }).then(function(err) {
-            throw new Error(err.message || 'Falha ao buscar dados da charge');
+            throw new Error(err.message || 'Falha ao buscar dados da charge para validacao');
           });
         }
         return resp.json();
@@ -1593,129 +1630,104 @@
         if (!Array.isArray(data) || !data.length) {
           throw new Error('Nenhum dado encontrado para o chargeUuid informado');
         }
-
         var chargeData = data[0];
+        var chargeValue = parseFloat(chargeData.value);
+        var configAmount = parseFloat(amount);
 
-        // Passo 2: Montar paymentRequest e criar ApplePaySession
-        var paymentRequest = {
-          countryCode: countryCode,
-          currencyCode: chargeData.currency || 'BRL',
-          merchantCapabilities: ['supports3DS'],
-          supportedNetworks: supportedNetworks,
-          total: {
-            label: displayName,
-            amount: String(chargeData.value)
-          }
-        };
-
-        var session;
-        try {
-          session = new ApplePaySession(3, paymentRequest);
-        } catch (e) {
-          releaseApplePayLock();
-          callOnError(new Error('Falha ao criar ApplePaySession: ' + e.message));
-          return;
+        if (chargeValue !== configAmount) {
+          throw new Error(
+            'O valor informado (' + configAmount.toFixed(2) +
+            ') diverge do valor da charge (' + chargeValue.toFixed(2) +
+            '). Corrija o parametro amount.'
+          );
         }
 
-        // Passo 3: Merchant validation
-        session.onvalidatemerchant = function(event) {
-          var merchantValidationTimeout = setTimeout(function() {
-            releaseApplePayLock();
-            session.abort();
-            callOnError(new Error('Timeout na validacao do merchant Apple Pay'));
-          }, 10000);
-
-          fetch(`${API_BASE_URL}/api/v1/bank/public/charge/applepay/${encodeURIComponent(chargeUuid)}/session`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'accept': 'application/json' },
-            body: JSON.stringify({
-              validation_url: event.validationURL,
-              merchant_domain: merchantDomain,
-              display_name: displayName
-            })
+        // Valor validado — prosseguir com a session do merchant
+        return fetch(`${API_BASE_URL}/api/v1/bank/public/charge/applepay/${encodeURIComponent(chargeUuid)}/session`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'accept': 'application/json' },
+          body: JSON.stringify({
+            validation_url: event.validationURL,
+            merchant_domain: merchantDomain,
+            display_name: displayName
           })
-          .then(function(resp) {
-            clearTimeout(merchantValidationTimeout);
-            if (!resp.ok) {
-              return resp.json().catch(function() { return {}; }).then(function(err) {
-                throw new Error(err.message || 'Falha na validacao do merchant Apple Pay');
-              });
-            }
-            return resp.json();
-          })
-          .then(function(merchantSession) {
-            session.completeMerchantValidation(merchantSession);
-          })
-          .catch(function(err) {
-            clearTimeout(merchantValidationTimeout);
-            releaseApplePayLock();
-            session.abort();
-            callOnError(err);
+        });
+      })
+      .then(function(resp) {
+        clearTimeout(merchantValidationTimeout);
+        if (!resp.ok) {
+          return resp.json().catch(function() { return {}; }).then(function(err) {
+            throw new Error(err.message || 'Falha na validacao do merchant Apple Pay');
           });
-        };
-
-        // Passo 4: Pagamento autorizado pelo usuario (Face ID / Touch ID)
-        session.onpaymentauthorized = function(event) {
-          var token = event.payment.token;
-          var paymentMethod = token.paymentMethod || {};
-          var paymentData = token.paymentData || {};
-          var header = paymentData.header || {};
-
-          // De-para: tipo Apple Pay -> tipo A55
-          // Apple retorna: 'credit', 'debit', 'prepaid', 'store'
-          var appleTypeMap = {
-            credit:  'credit_card',
-            debit:   'debit_card',
-            prepaid: 'debit_card',
-            store:   'credit_card'
-          };
-          var cardType = appleTypeMap[paymentMethod.type] || 'credit_card';
-
-          var applePayPayload = {
-            applepay: {
-              type: cardType,
-              wallet_key: JSON.stringify(paymentData),
-              ephemeral_public_key: header.ephemeralPublicKey || ''
-            }
-          };
-
-          fetch(`${API_BASE_URL}/api/v1/bank/public/charge/${encodeURIComponent(chargeUuid)}/pay`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(applePayPayload)
-          })
-          .then(function(resp) {
-            if (!resp.ok) {
-              return resp.json().catch(function() { return {}; }).then(function(err) {
-                throw new Error(err.message || 'Falha ao processar pagamento Apple Pay');
-              });
-            }
-            return resp.json();
-          })
-          .then(function(result) {
-            session.completePayment(ApplePaySession.STATUS_SUCCESS);
-            releaseApplePayLock();
-            callOnSuccess(result);
-          })
-          .catch(function(err) {
-            session.completePayment(ApplePaySession.STATUS_FAILURE);
-            releaseApplePayLock();
-            callOnError(err);
-          });
-        };
-
-        // Passo 5: Usuario cancelou o payment sheet
-        session.oncancel = function() {
-          releaseApplePayLock();
-          callOnClose();
-        };
-
-        session.begin();
+        }
+        return resp.json();
+      })
+      .then(function(merchantSession) {
+        session.completeMerchantValidation(merchantSession);
       })
       .catch(function(err) {
+        clearTimeout(merchantValidationTimeout);
+        releaseApplePayLock();
+        session.abort();
+        callOnError(err);
+      });
+    };
+
+    // Pagamento autorizado pelo usuario (Face ID / Touch ID)
+    session.onpaymentauthorized = function(event) {
+      var token = event.payment.token;
+      var paymentMethod = token.paymentMethod || {};
+      var paymentData = token.paymentData || {};
+      var header = paymentData.header || {};
+
+      var appleTypeMap = {
+        credit:  'credit_card',
+        debit:   'debit_card',
+        prepaid: 'debit_card',
+        store:   'credit_card'
+      };
+      var cardType = appleTypeMap[paymentMethod.type] || 'credit_card';
+
+      var applePayPayload = {
+        applepay: {
+          type: cardType,
+          wallet_key: JSON.stringify(paymentData),
+          ephemeral_public_key: header.ephemeralPublicKey || ''
+        }
+      };
+
+      fetch(`${API_BASE_URL}/api/v1/bank/public/charge/${encodeURIComponent(chargeUuid)}/pay`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(applePayPayload)
+      })
+      .then(function(resp) {
+        if (!resp.ok) {
+          return resp.json().catch(function() { return {}; }).then(function(err) {
+            throw new Error(err.message || 'Falha ao processar pagamento Apple Pay');
+          });
+        }
+        return resp.json();
+      })
+      .then(function(result) {
+        session.completePayment(ApplePaySession.STATUS_SUCCESS);
+        releaseApplePayLock();
+        callOnSuccess(result);
+      })
+      .catch(function(err) {
+        session.completePayment(ApplePaySession.STATUS_FAILURE);
         releaseApplePayLock();
         callOnError(err);
       });
+    };
+
+    // Usuario cancelou o payment sheet
+    session.oncancel = function() {
+      releaseApplePayLock();
+      callOnClose();
+    };
+
+    session.begin();
   };
 
   // Expose globally
