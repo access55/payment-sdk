@@ -6,7 +6,7 @@
 (function (global) {
   const SDK = {};
 
-  SDK.VERSION = '4.0.7';
+  SDK.VERSION = '4.0.8';
 
 
 
@@ -1618,45 +1618,20 @@
         callOnError(new Error('Timeout na validacao do merchant Apple Pay'));
       }, 10000);
 
-      // Validar amount contra o valor real da charge antes de prosseguir
-      fetch(`${API_BASE_URL}/api/v1/bank/public/charge?charge_uuid=${encodeURIComponent(chargeUuid)}`)
-      .then(function(resp) {
-        if (!resp.ok) {
-          return resp.json().catch(function() { return {}; }).then(function(err) {
-            throw new Error(err.message || 'Falha ao buscar dados da charge para validacao');
-          });
-        }
-        return resp.json();
-      })
-      .then(function(data) {
-        if (!Array.isArray(data) || !data.length) {
-          throw new Error('Nenhum dado encontrado para o chargeUuid informado');
-        }
-        var chargeData = data[0];
-        var chargeValue = parseFloat(chargeData.value);
-        var configAmount = parseFloat(amount);
+      console.log('[A55Pay] onvalidatemerchant - validationURL:', event.validationURL);
 
-        if (chargeValue !== configAmount) {
-          throw new Error(
-            'O valor informado (' + configAmount.toFixed(2) +
-            ') diverge do valor da charge (' + chargeValue.toFixed(2) +
-            '). Corrija o parametro amount.'
-          );
-        }
-
-        // Valor validado — prosseguir com a session do merchant
-        return fetch(`${API_BASE_URL}/api/v1/bank/public/charge/applepay/${encodeURIComponent(chargeUuid)}/session`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'accept': 'application/json' },
-          body: JSON.stringify({
-            validation_url: event.validationURL,
-            merchant_domain: merchantDomain,
-            display_name: displayName
-          })
-        });
+      fetch(`${API_BASE_URL}/api/v1/bank/public/charge/applepay/${encodeURIComponent(chargeUuid)}/session`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'accept': 'application/json' },
+        body: JSON.stringify({
+          validation_url: event.validationURL,
+          merchant_domain: merchantDomain,
+          display_name: displayName
+        })
       })
       .then(function(resp) {
         clearTimeout(merchantValidationTimeout);
+        console.log('[A55Pay] /session status:', resp.status);
         if (!resp.ok) {
           return resp.json().catch(function() { return {}; }).then(function(err) {
             throw new Error(err.message || 'Falha na validacao do merchant Apple Pay');
@@ -1664,11 +1639,15 @@
         }
         return resp.json();
       })
-      .then(function(merchantSession) {
-        session.completeMerchantValidation(merchantSession);
+      .then(function(response) {
+        // Backend retorna { merchant_session: {...}, expires_at: "..." }
+        var merchantSessionData = response.merchant_session || response;
+        console.log('[A55Pay] completeMerchantValidation com:', Object.keys(merchantSessionData));
+        session.completeMerchantValidation(merchantSessionData);
       })
       .catch(function(err) {
         clearTimeout(merchantValidationTimeout);
+        console.error('[A55Pay] merchant validation erro:', err);
         releaseApplePayLock();
         session.abort();
         callOnError(err);
