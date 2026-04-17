@@ -1675,50 +1675,71 @@
 
     // Pagamento autorizado pelo usuario (Face ID / Touch ID)
     session.onpaymentauthorized = function(event) {
-      var token = event.payment.token;
-      var paymentMethod = token.paymentMethod || {};
-      var paymentData = token.paymentData || {};
-      var header = paymentData.header || {};
+      try {
+        var token = event.payment.token;
+        var paymentMethod = token.paymentMethod || {};
+        var paymentData = token.paymentData || {};
+        var header = paymentData.header || {};
 
-      var appleTypeMap = {
-        credit:  'credit_card',
-        debit:   'debit_card',
-        prepaid: 'debit_card',
-        store:   'credit_card'
-      };
-      var cardType = appleTypeMap[paymentMethod.type] || 'credit_card';
+        console.log('[A55Pay] Apple Pay authorized');
+        console.log('[A55Pay] paymentMethod.type:', paymentMethod.type);
+        console.log('[A55Pay] paymentMethod.network:', paymentMethod.network);
+        console.log('[A55Pay] paymentMethod.displayName:', paymentMethod.displayName);
+        console.log('[A55Pay] paymentData keys:', Object.keys(paymentData));
+        console.log('[A55Pay] header keys:', Object.keys(header));
 
-      var applePayPayload = {
-        applepay: {
-          type: cardType,
-          wallet_key: JSON.stringify(paymentData),
-          ephemeral_public_key: header.ephemeralPublicKey || ''
-        }
-      };
+        var appleTypeMap = {
+          credit:  'credit_card',
+          debit:   'debit_card',
+          prepaid: 'debit_card',
+          store:   'credit_card'
+        };
+        var cardType = appleTypeMap[paymentMethod.type] || 'credit_card';
 
-      fetch(`${API_BASE_URL}/api/v1/bank/public/charge/${encodeURIComponent(chargeUuid)}/pay`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(applePayPayload)
-      })
-      .then(function(resp) {
-        if (!resp.ok) {
-          return resp.json().catch(function() { return {}; }).then(function(err) {
-            throw new Error(err.message || 'Falha ao processar pagamento Apple Pay');
-          });
-        }
-        return resp.json();
-      })
-      .then(function(result) {
-        session.completePayment(ApplePaySession.STATUS_SUCCESS);
-        releaseApplePayLock();
-        callOnSuccess(result);
-      })
-      .catch(function(err) {
+        var applePayPayload = {
+          applepay: {
+            type: cardType,
+            wallet_key: JSON.stringify(paymentData),
+            ephemeral_public_key: header.ephemeralPublicKey || ''
+          }
+        };
+
+        console.log('[A55Pay] Enviando payload para /pay:', JSON.stringify({ type: cardType, has_wallet_key: !!paymentData, has_ephemeral: !!header.ephemeralPublicKey }));
+
+        fetch(`${API_BASE_URL}/api/v1/bank/public/charge/${encodeURIComponent(chargeUuid)}/pay`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(applePayPayload)
+        })
+        .then(function(resp) {
+          console.log('[A55Pay] /pay response status:', resp.status);
+          if (!resp.ok) {
+            return resp.text().then(function(text) {
+              console.error('[A55Pay] /pay error response:', text);
+              try { var parsed = JSON.parse(text); throw new Error(parsed.message || 'Falha ao processar pagamento Apple Pay'); }
+              catch(e) { if (e.message.includes('Falha')) throw e; throw new Error('Falha ao processar pagamento Apple Pay: ' + resp.status); }
+            });
+          }
+          return resp.json();
+        })
+        .then(function(result) {
+          console.log('[A55Pay] /pay sucesso:', result);
+          session.completePayment(ApplePaySession.STATUS_SUCCESS);
+          releaseApplePayLock();
+          callOnSuccess(result);
+        })
+        .catch(function(err) {
+          console.error('[A55Pay] /pay erro:', err);
+          session.completePayment(ApplePaySession.STATUS_FAILURE);
+          releaseApplePayLock();
+          callOnError(err);
+        });
+      } catch (e) {
+        console.error('[A55Pay] Erro inesperado em onpaymentauthorized:', e);
         session.completePayment(ApplePaySession.STATUS_FAILURE);
         releaseApplePayLock();
-        callOnError(err);
-      });
+        callOnError(e);
+      }
     };
 
     // Usuario cancelou o payment sheet
