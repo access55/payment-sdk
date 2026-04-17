@@ -6,6 +6,8 @@
 (function (global) {
   const SDK = {};
 
+  SDK.VERSION = '4.0.5';
+
 
 
 
