@@ -44,9 +44,6 @@
   <label for="chargeUuid">chargeUuid <small>(obrigatorio)</small></label>
   <input id="chargeUuid" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
 
-  <label for="merchantIdentifier">merchantIdentifier <small>(obrigatorio)</small></label>
-  <input id="merchantIdentifier" type="text" placeholder="merchant.com.suaempresa.pay" />
-
   <label for="countryCode">countryCode <small>(obrigatorio — ISO 3166-1 alpha-2, ex: BR)</small></label>
   <input id="countryCode" type="text" value="BR" maxlength="2" style="text-transform:uppercase" />
 
@@ -88,7 +85,6 @@
     function getConfig() {
       return {
         chargeUuid: document.getElementById('chargeUuid').value.trim(),
-        merchantIdentifier: document.getElementById('merchantIdentifier').value.trim(),
         countryCode: document.getElementById('countryCode').value.trim().toUpperCase(),
         merchantDomain: document.getElementById('merchantDomain').value.trim() || 'pay.a55.tech',
         displayName: document.getElementById('displayName').value.trim() || 'A55Pay'
@@ -102,10 +98,6 @@
         log('ERRO: chargeUuid e obrigatorio');
         return;
       }
-      if (!cfg.merchantIdentifier) {
-        log('ERRO: merchantIdentifier e obrigatorio');
-        return;
-      }
       if (!cfg.countryCode || !/^[A-Z]{2}$/.test(cfg.countryCode)) {
         log('ERRO: countryCode invalido — informe um codigo ISO 3166-1 alpha-2 (ex: BR)');
         return;
@@ -115,7 +107,6 @@
 
       A55Pay.startApplePay({
         chargeUuid: cfg.chargeUuid,
-        merchantIdentifier: cfg.merchantIdentifier,
         countryCode: cfg.countryCode,
         merchantDomain: cfg.merchantDomain,
         displayName: cfg.displayName,

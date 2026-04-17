@@ -1529,7 +1529,6 @@
    *
    * @param {Object} config
    * @param {string} config.chargeUuid           - UUID da charge (obrigatorio)
-   * @param {string} config.merchantIdentifier   - Merchant identifier Apple (obrigatorio)
    * @param {string} [config.merchantDomain]     - Dominio do merchant (default: 'pay.a55.tech')
    * @param {string} [config.displayName]        - Nome exibido no payment sheet (default: 'A55Pay')
    * @param {string[]} [config.supportedNetworks] - Redes suportadas (default: visa, masterCard, elo, amex)
@@ -1540,7 +1539,6 @@
   SDK.startApplePay = function(config) {
     const {
       chargeUuid,
-      merchantIdentifier,
       countryCode,
       merchantDomain = 'pay.a55.tech',
       displayName = 'A55Pay',
@@ -1557,10 +1555,6 @@
     // Validacoes obrigatorias
     if (!chargeUuid) {
       callOnError(new Error('chargeUuid e obrigatorio para A55Pay.startApplePay()'));
-      return;
-    }
-    if (!merchantIdentifier) {
-      callOnError(new Error('merchantIdentifier e obrigatorio para A55Pay.startApplePay()'));
       return;
     }
     if (!countryCode || typeof countryCode !== 'string' || !/^[A-Z]{2}$/.test(countryCode)) {

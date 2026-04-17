@@ -45,7 +45,6 @@ Inicia o fluxo de pagamento Apple Pay. **Deve ser chamado dentro de um handler d
 | Parametro           | Tipo       | Obrigatorio | Descricao |
 |---------------------|------------|-------------|-----------|
 | `chargeUuid`        | `string`   | sim         | UUID da charge criada via API A55 com tipo `applepay` |
-| `merchantIdentifier`| `string`   | sim         | Merchant Identifier cadastrado no Apple Developer Portal |
 | `countryCode`       | `string`   | sim         | Codigo do pais no formato ISO 3166-1 alpha-2 (ex: `'BR'`, `'US'`). Validado por regex `/^[A-Z]{2}$/` |
 | `merchantDomain`    | `string`   | nao         | Dominio do merchant (default: `'pay.a55.tech'`) |
 | `displayName`       | `string`   | nao         | Nome exibido no payment sheet (default: `'A55Pay'`) |
@@ -73,7 +72,6 @@ Inicia o fluxo de pagamento Apple Pay. **Deve ser chamado dentro de um handler d
   btn.addEventListener('click', function() {
     A55Pay.startApplePay({
       chargeUuid: 'UUID_DA_CHARGE',
-      merchantIdentifier: 'merchant.com.suaempresa.pay',
       countryCode: 'BR',
       merchantDomain: 'www.suaempresa.com.br',
       displayName: 'Sua Empresa',
@@ -149,7 +147,6 @@ O campo `wallet_key` contem o `paymentData` completo serializado como string JSO
 |----------|-----------------|
 | Browser sem suporte | `'Apple Pay nao esta disponivel neste dispositivo ou browser'` |
 | `chargeUuid` ausente | `'chargeUuid e obrigatorio para A55Pay.startApplePay()'` |
-| `merchantIdentifier` ausente | `'merchantIdentifier e obrigatorio para A55Pay.startApplePay()'` |
 | `countryCode` ausente ou invalido | `'countryCode e obrigatorio e deve ser um codigo ISO 3166-1 alpha-2 valido (ex: "BR", "US")'` |
 | Sessao ja em andamento | `'Uma sessao Apple Pay ja esta em andamento'` |
 | Falha ao buscar charge | `'Falha ao buscar dados da charge'` |
