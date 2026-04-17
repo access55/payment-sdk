@@ -6,7 +6,7 @@
 (function (global) {
   const SDK = {};
 
-  SDK.VERSION = '4.0.6';
+  SDK.VERSION = '4.0.7';
 
 
 
@@ -1684,11 +1684,8 @@
         var header = paymentData.header || {};
 
         console.log('[A55Pay] Apple Pay authorized');
-        console.log('[A55Pay] paymentMethod.type:', paymentMethod.type);
-        console.log('[A55Pay] paymentMethod.network:', paymentMethod.network);
-        console.log('[A55Pay] paymentMethod.displayName:', paymentMethod.displayName);
+        console.log('[A55Pay] paymentMethod:', paymentMethod.type, paymentMethod.network, paymentMethod.displayName);
         console.log('[A55Pay] paymentData keys:', Object.keys(paymentData));
-        console.log('[A55Pay] header keys:', Object.keys(header));
 
         var appleTypeMap = {
           credit:  'credit_card',
@@ -1701,12 +1698,12 @@
         var applePayPayload = {
           applepay: {
             type: cardType,
-            wallet_key: JSON.stringify(paymentData),
+            wallet_key: paymentData.data || '',
             ephemeral_public_key: header.ephemeralPublicKey || ''
           }
         };
 
-        console.log('[A55Pay] Enviando payload para /pay:', JSON.stringify({ type: cardType, has_wallet_key: !!paymentData, has_ephemeral: !!header.ephemeralPublicKey }));
+        console.log('[A55Pay] Payload:', { type: cardType, wallet_key_length: (paymentData.data || '').length, has_ephemeral: !!header.ephemeralPublicKey });
 
         fetch(`${API_BASE_URL}/api/v1/bank/public/charge/${encodeURIComponent(chargeUuid)}/pay`, {
           method: 'POST',
@@ -1714,10 +1711,10 @@
           body: JSON.stringify(applePayPayload)
         })
         .then(function(resp) {
-          console.log('[A55Pay] /pay response status:', resp.status);
+          console.log('[A55Pay] /pay status:', resp.status);
           if (!resp.ok) {
             return resp.text().then(function(text) {
-              console.error('[A55Pay] /pay error response:', text);
+              console.error('[A55Pay] /pay error:', text);
               try { var parsed = JSON.parse(text); throw new Error(parsed.message || 'Falha ao processar pagamento Apple Pay'); }
               catch(e) { if (e.message.includes('Falha')) throw e; throw new Error('Falha ao processar pagamento Apple Pay: ' + resp.status); }
             });
