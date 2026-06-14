@@ -23,7 +23,7 @@
     "provenance": true
   },
   "devDependencies": {
-    "esbuild": "^0.25.8"
+    "esbuild": "^0.28.1"
   },
   "packageManager": "pnpm@10.13.1"
 }
