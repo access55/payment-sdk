@@ -8,6 +8,15 @@
 
   SDK.VERSION = '4.0.8';
 
+  // Sanitize a postal code for the core API.
+  // Brazilian CEPs are numeric-only; international zip codes may be
+  // alphanumeric (e.g. UK/Canada), so only strip non-digits for BR.
+  function formatPostalCode(value, country) {
+    if (value == null) return value;
+    const isBrazil = !country || String(country).toUpperCase().startsWith('BR');
+    return isBrazil ? value.replace(/\D/g, '') : value.trim().toUpperCase();
+  }
+
 
 
 
@@ -243,7 +252,7 @@
           ccv: userData.cvc,
         },
         address: {
-          postal_code: userData.zipcode?.replace(/\D/g, ''),
+          postal_code: formatPostalCode(userData.zipcode, userData.country),
           street: userData.street1,
           address_number: 'n/d',
           complement: userData.street2 || userData.street1 || '',
@@ -896,7 +905,7 @@
           card_cryptogram: userData.card_cryptogram
         },
         address: {
-          postal_code: userData.postal_code?.replace(/\D/g, ''),
+          postal_code: formatPostalCode(userData.postal_code, userData.country),
           street: userData.street,
           address_number: userData.address_number || 'n/d',
           complement: userData.complement || '',
@@ -906,7 +915,7 @@
           country: userData.country.toUpperCase() || 'BR'
         },
         shipping_address: {
-          postal_code: (userData.shipping_postal_code || userData.postal_code)?.replace(/\D/g, ''),
+          postal_code: formatPostalCode(userData.shipping_postal_code || userData.postal_code, userData.shipping_country || userData.country),
           street: userData.shipping_street || userData.street,
           address_number: userData.shipping_address_number || userData.address_number || 'n/d',
           complement: userData.shipping_complement || userData.complement || '',
